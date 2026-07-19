@@ -70,6 +70,14 @@ module "jenkins" {
   git_branch      = var.git_branch
   github_username = var.github_username
   github_pat      = var.github_pat
+
+  # module.eks.cluster_name/oidc_*/etc. don't touch aws_eks_node_group, so
+  # without this Terraform schedules helm_release.jenkins in parallel with
+  # any node group replacement (e.g. an instance_types change) instead of
+  # after it — jenkins-0 then has zero nodes to schedule onto and the Helm
+  # install times out. Force the whole eks module (node group included) to
+  # finish first, same as module.argo_cd below.
+  depends_on = [module.eks]
 }
 
 module "argo_cd" {

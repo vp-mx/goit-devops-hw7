@@ -121,6 +121,10 @@ resource "helm_release" "jenkins" {
   chart            = "jenkins"
   version          = var.chart_version
   create_namespace = false
+  # Default (300s) is tight for a first-time image pull + node group churn;
+  # module "jenkins" also gets an explicit depends_on = [module.eks] at the
+  # root so this never races a node group replacement (see main.tf).
+  timeout = 600
 
   values = [
     templatefile("${path.module}/values.yaml.tpl", {

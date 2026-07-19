@@ -10,6 +10,7 @@ resource "helm_release" "argo_cd" {
   chart            = "argo-cd"
   version          = var.chart_version
   create_namespace = true
+  timeout          = 600 # a bit more headroom than the 300s default for first-time image pulls
 
   values = [
     file("${path.module}/values.yaml")
