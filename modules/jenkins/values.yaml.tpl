@@ -87,6 +87,11 @@ controller:
                         }
                       }
                     ''')
+                    // Without this, the Job DSL step runs unsandboxed and Jenkins
+                    // blocks it until an admin manually approves it in
+                    // "In-process Script Approval" -- defeating the whole point
+                    // of the seed-job creating the pipeline automatically.
+                    sandbox(true)
                   }
                 }
               }
