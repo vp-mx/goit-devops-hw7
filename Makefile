@@ -21,7 +21,8 @@ TF_VARS        = -var="aws_region=$(REGION)" -var="project=$(PROJECT)"
 .PHONY: help init fmt validate plan apply bootstrap destroy clean \
         kubeconfig ecr-login docker-push metrics-server \
         helm-lint helm-template helm-install helm-uninstall status \
-        jenkins-url jenkins-password argocd-url argocd-password argocd-app-status
+        jenkins-url jenkins-password argocd-url argocd-password argocd-app-status \
+        reload-env
 
 # ---------------------------------------------------------------------------
 # Terraform
@@ -134,3 +135,15 @@ argocd-password: ## Print the Argo CD initial admin password
 
 argocd-app-status: ## Show the sync/health status of the django-app Argo CD Application
 	kubectl get application django-app -n argocd
+
+# ---------------------------------------------------------------------------
+# Env
+# ---------------------------------------------------------------------------
+# NOTE: a `make` recipe runs in its own subshell, so it can never export
+# variables into the shell that invoked it — `make reload-env` on its own
+# does nothing useful. This target instead prints `export KEY=VALUE` lines;
+# feed them back into your current shell with `eval`:
+#   eval "$$(make reload-env)"
+reload-env: ## Print export statements from .env — usage: eval "$$(make reload-env)"
+	@test -f .env || (echo ".env not found — copy .env.example to .env first" >&2 && exit 1)
+	@grep -v '^#' .env | grep -v '^$$' | sed 's/^/export /'

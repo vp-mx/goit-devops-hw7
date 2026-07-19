@@ -73,12 +73,22 @@ goit-devops-hw7/
 
 ## 1. Bootstrap the Terraform backend
 
-`github_username` and `github_pat` have no defaults (Jenkins and Argo CD both need them to read/write this repo) — export them as `TF_VAR_*` env vars so they're picked up automatically by every `terraform`/`make` command below, and never end up typed into a shell history or committed to a `.tfvars` file:
+`github_username` and `github_pat` have no defaults (Jenkins and Argo CD both need them to read/write this repo) — set them as `TF_VAR_*` env vars so they're picked up automatically by every `terraform`/`make` command below, and never end up typed into a shell history or committed to a `.tfvars` file:
 
 ```bash
 export TF_VAR_github_username=<your-github-username>
 export TF_VAR_github_pat=<your-personal-access-token>
 ```
+
+Or, to avoid re-typing them every session, copy `.env.example` to `.env` (gitignored) and fill in real values, then load it with either:
+
+```bash
+set -a && source .env && set +a
+# or, via the Makefile:
+eval "$(make reload-env)"
+```
+
+(`make reload-env` on its own can't set variables in your shell — a Makefile recipe runs in a subshell — so it just prints `export ...` lines; `eval` is what actually applies them to your current shell.)
 
 Then bootstrap the remote state backend in S3 and DynamoDB:
 
