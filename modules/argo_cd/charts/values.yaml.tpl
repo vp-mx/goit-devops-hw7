@@ -10,6 +10,20 @@ applications:
       helm:
         valueFiles:
           - values.yaml
+        # charts/django-app/values.yaml intentionally ships placeholders for
+        # these (image.repository / both secrets) -- same values a human
+        # would pass via `helm install --set ...` per the README, just
+        # supplied here so Argo CD's automated sync doesn't deploy the
+        # literal placeholder strings.
+        parameters:
+          - name: image.repository
+            value: "${app_image_repository}"
+          - name: secrets.POSTGRES_PASSWORD
+            value: "${app_postgres_password}"
+            forceString: true
+          - name: secrets.DJANGO_SECRET_KEY
+            value: "${app_django_secret_key}"
+            forceString: true
     destination:
       server: https://kubernetes.default.svc
       namespace: ${app_namespace}

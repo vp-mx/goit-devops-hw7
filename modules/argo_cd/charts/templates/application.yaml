@@ -23,6 +23,10 @@ spec:
     helm:
       valueFiles:
         {{- toYaml .source.helm.valueFiles | nindent 8 }}
+      {{- if .source.helm.parameters }}
+      parameters:
+        {{- toYaml .source.helm.parameters | nindent 8 }}
+      {{- end }}
   destination:
     server: {{ .destination.server }}
     namespace: {{ .destination.namespace }}

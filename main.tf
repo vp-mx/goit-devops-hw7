@@ -88,8 +88,9 @@ module "argo_cd" {
   github_username = var.github_username
   github_pat      = var.github_pat
 
-  app_chart_path = "charts/django-app"
-  app_namespace  = "default"
+  app_chart_path       = "charts/django-app"
+  app_namespace        = "default"
+  app_image_repository = module.ecr.ecr_repository_url
 
   depends_on = [module.eks]
 }

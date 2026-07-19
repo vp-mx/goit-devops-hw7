@@ -56,3 +56,14 @@ variable "github_pat" {
   type        = string
   sensitive   = true
 }
+
+# --- django-app Helm values Argo CD must override -----------------------
+# charts/django-app/values.yaml ships with placeholder values for these
+# (REPLACE_WITH_ECR_REPOSITORY_URL / empty secrets) -- deliberately, so
+# nothing real is ever committed. The manual `helm install --set ...` in
+# the README covers a human running it by hand; Argo CD needs the
+# equivalent passed as Application Helm parameters instead.
+variable "app_image_repository" {
+  description = "ECR repository URL for the django-app image (module.ecr.ecr_repository_url) -- overrides the values.yaml placeholder"
+  type        = string
+}
