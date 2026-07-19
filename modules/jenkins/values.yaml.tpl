@@ -59,49 +59,35 @@ controller:
                       username: "${github_username}"
                       password: "${github_pat}"
                       description: GitHub PAT (repo read/write)
-      seed-job: |
+      pipeline-jobs: |
+        # JCasC's own "jobs:" key IS the seeding mechanism -- it runs this
+        # Job DSL script directly at controller boot/reload, fully trusted,
+        # no Script Approval involved. No separate "seed-job" freestyle job
+        # or nested "Process Job DSLs" build step needed (an earlier version
+        # of this file used that pattern and hit two problems: the nested
+        # dsl-step runs unsandboxed and needs manual approval, and it's a
+        # different Groovy DSL context where sandbox(true) isn't even a
+        # valid method -- calling it crashed Jenkins at boot entirely).
         jobs:
           - script: >
-              job('seed-job') {
-                description('Generates the CI/CD pipeline for the Django project from this repo Jenkinsfile')
-                scm {
-                  git {
-                    remote {
-                      url('${git_repo_url}')
-                      credentials('github-token')
-                    }
-                    branches('*/${git_branch}')
-                  }
+              pipelineJob("django-app-pipeline") {
+                description("Kaniko build+push to ECR, then bump charts/django-app/values.yaml#image.tag -- see Jenkinsfile")
+                parameters {
+                  stringParam("ECR_REPOSITORY", "${ecr_repository_url}", "ECR repository URL (from terraform output ecr_repository_url)")
+                  stringParam("TARGET_BRANCH", "${git_branch}", "Branch to push the updated chart tag to")
                 }
-                steps {
-                  dsl {
-                    text('''
-                      pipelineJob("django-app-pipeline") {
-                        parameters {
-                          stringParam("ECR_REPOSITORY", "${ecr_repository_url}", "ECR repository URL (from terraform output ecr_repository_url)")
-                          stringParam("TARGET_BRANCH", "${git_branch}", "Branch to push the updated chart tag to")
+                definition {
+                  cpsScm {
+                    scm {
+                      git {
+                        remote {
+                          url("${git_repo_url}")
+                          credentials("github-token")
                         }
-                        definition {
-                          cpsScm {
-                            scm {
-                              git {
-                                remote {
-                                  url("${git_repo_url}")
-                                  credentials("github-token")
-                                }
-                                branches("*/${git_branch}")
-                              }
-                            }
-                            scriptPath("Jenkinsfile")
-                          }
-                        }
+                        branches("*/${git_branch}")
                       }
-                    ''')
-                    // Without this, the Job DSL step runs unsandboxed and Jenkins
-                    // blocks it until an admin manually approves it in
-                    // "In-process Script Approval" -- defeating the whole point
-                    // of the seed-job creating the pipeline automatically.
-                    sandbox(true)
+                    }
+                    scriptPath("Jenkinsfile")
                   }
                 }
               }

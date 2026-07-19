@@ -24,7 +24,7 @@ goit-devops-hw7/
 │   ├── vpc/                   # VPC, public/private subnets, IGW, NAT, routing
 │   ├── ecr/                   # ECR repository for the application image
 │   ├── eks/                   # EKS cluster, managed node group, IAM, OIDC provider
-│   ├── jenkins/                # Jenkins via Helm: JCasC, seed job, IRSA for Kaniko
+│   ├── jenkins/                # Jenkins via Helm: JCasC, pipeline auto-created via jobs:, IRSA for Kaniko
 │   └── argo_cd/                 # Argo CD via Helm + Application/repository-credential chart
 │
 ├── app/                       # Application code + Dockerfile
@@ -60,7 +60,7 @@ goit-devops-hw7/
 - **EKS** — control plane spanning all 6 subnets, a managed node group in the private subnets, plus necessary add-ons (`vpc-cni`, `coredns`, `kube-proxy`, `aws-ebs-csi-driver`). The node role carries the required AWS managed policies.
 - **ECR** — repository with scan-on-push, a lifecycle policy to keep the 10 most recent images, and an access policy.
 - **Helm chart** — Deployment, Service of type `LoadBalancer`, ConfigMap and Secret for environment variables, an HPA scaling based on CPU utilization, and a single-replica Postgres StatefulSet with a PVC.
-- **Jenkins** (`modules/jenkins`) — installed via the `jenkinsci/jenkins` Helm chart. JCasC provisions a `github-token` credential and a `seed-job` on startup; the seed job runs Job DSL to generate the actual `django-app-pipeline` job from the `Jenkinsfile` in this repo. Builds run as short-lived Kubernetes pod agents (`kaniko` + `git` containers) under a `jenkins-sa` service account bound via IRSA to an IAM role scoped to `ecr:PutImage`/etc. on this project's ECR repo only — no static AWS keys anywhere in Jenkins.
+- **Jenkins** (`modules/jenkins`) — installed via the `jenkinsci/jenkins` Helm chart. JCasC provisions a `github-token` credential and, via its native `jobs:` key (a trusted Job DSL script run directly at controller boot — no separate seed job or manual Script Approval needed), creates the `django-app-pipeline` pipeline job pointed at the `Jenkinsfile` in this repo. Builds run as short-lived Kubernetes pod agents (`kaniko` + `git` containers) under a `jenkins-sa` service account bound via IRSA to an IAM role scoped to `ecr:PutImage`/etc. on this project's ECR repo only — no static AWS keys anywhere in Jenkins.
 - **Argo CD** (`modules/argo_cd`) — installed via the official `argo/argo-cd` Helm chart (dex/applicationSet/notifications disabled to save resources), plus a small local chart (`modules/argo_cd/charts`) that declares the `django-app` `Application` CRD (pointing at `charts/django-app` on the tracked branch, `automated: {prune: true, selfHeal: true}`) and a repository-credential `Secret` so Argo CD can pull this (private) repo.
 
 ## Prerequisites
@@ -172,7 +172,7 @@ make jenkins-url        # external LoadBalancer hostname
 make jenkins-password   # admin / <this password>, or TF_VAR_jenkins_admin_password if you overrode it
 ```
 
-Log in and confirm `seed-job` ran once at startup (**Manage Jenkins → System Log**, or just check that a job called `django-app-pipeline` already exists — JCasC creates it automatically, no manual clicking required). Open `django-app-pipeline` → **Build Now**. The pipeline:
+Log in and confirm `django-app-pipeline` already exists in the job list — JCasC creates it automatically at controller boot (via its `jobs:` key), no manual clicking required. Open it → **Build Now**. The pipeline:
 1. **Build & Push Docker Image** — runs `app/Dockerfile` through Kaniko (as the `jenkins-sa` pod, using IRSA — no AWS keys stored anywhere) and pushes `<ecr-repo>:v1.0.<build-number>` and `:latest` to ECR.
 2. **Update Chart Tag in Git** — `sed`s the new tag into `charts/django-app/values.yaml#image.tag`, commits, and pushes to the tracked branch using the `github-token` credential.
 
