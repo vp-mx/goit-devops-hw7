@@ -57,14 +57,19 @@ variable "persistence_enabled" {
 }
 
 variable "resources" {
+  # 768Mi killed the controller with OOMKilled during plugin loading on
+  # first boot (JVM + kubernetes/workflow-aggregator/git/configuration-as-code/
+  # github/job-dsl all initializing at once). 1.5Gi limit + an explicit
+  # -Xmx (see controller.javaOpts in values.yaml.tpl) fixes it -- t3.small
+  # nodes (2GiB each) have room for this alongside Django/Postgres/Argo CD.
   description = "CPU/memory requests and limits for the Jenkins controller pod"
   type = object({
     requests = object({ cpu = string, memory = string })
     limits   = object({ cpu = string, memory = string })
   })
   default = {
-    requests = { cpu = "200m", memory = "512Mi" }
-    limits   = { cpu = "500m", memory = "768Mi" }
+    requests = { cpu = "300m", memory = "768Mi" }
+    limits   = { cpu = "1000m", memory = "1536Mi" }
   }
 }
 

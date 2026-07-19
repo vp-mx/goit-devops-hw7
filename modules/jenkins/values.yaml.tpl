@@ -8,11 +8,21 @@ controller:
     username: ${admin_username}
     password: ${admin_password}
 
+  # NOTE: these are top-level controller.* fields per the actual jenkinsci/jenkins
+  # chart schema (verified against the chart source) -- there is no nested
+  # controller.service.* object; an earlier version of this file had one and
+  # it was silently ignored (Helm doesn't validate unknown keys).
   serviceType: LoadBalancer
   servicePort: 80
-  service:
-    port: 80
-    targetPort: 8080
+  targetPort: 8080
+
+  # Explicit heap size: the JVM's container-aware default sizing left too
+  # little headroom during plugin loading (kubernetes, workflow-aggregator,
+  # git, configuration-as-code, github, job-dsl all init at once on first
+  # boot) and the controller got OOMKilled repeatedly. -Xmx must stay well
+  # under resources.limits.memory to leave room for non-heap/metaspace/JVM
+  # overhead.
+  javaOpts: "-Xmx1024m -Xms512m"
 
   resources:
     requests:
