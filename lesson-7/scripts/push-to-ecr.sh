@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Build the theme-4 Django image and push it to ECR.
+# Build the Django image (theme 4, vendored into ../app of this repo) and
+# push it to ECR.
 #
 # Usage:
 #   ./scripts/push-to-ecr.sh [REGION] [REPO_NAME] [IMAGE_TAG] [APP_DIR]
 #
 # Defaults: REGION=eu-north-1  REPO_NAME=lesson-7-ecr  IMAGE_TAG=latest
-#           APP_DIR=../../goit-devops-hw (the theme-4 Django project, a
-#           sibling of this repo — adjust if your layout differs).
+#           APP_DIR=../app (the Django project + Dockerfile, vendored into
+#           this repo so CI (theme 9) can build it without depending on the
+#           theme-4 repo being checked out alongside this one).
 #
 # The account id and registry host are resolved automatically from the active
 # AWS credentials, so anyone can run this against their own account without
@@ -19,12 +21,12 @@ IMAGE_TAG="${3:-latest}"
 
 # Directory of this script, so it works regardless of the current working dir.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="${4:-${SCRIPT_DIR}/../../../goit-devops-hw}"
+APP_DIR="${4:-${SCRIPT_DIR}/../app}"
 
 if [ ! -f "${APP_DIR}/Dockerfile" ]; then
   echo "!! No Dockerfile found in ${APP_DIR}"
-  echo "   Pass the theme-4 Django project directory as the 4th argument, e.g.:"
-  echo "   ./scripts/push-to-ecr.sh ${REGION} ${REPO_NAME} ${IMAGE_TAG} /path/to/goit-devops-hw"
+  echo "   Pass the Django project directory as the 4th argument, e.g.:"
+  echo "   ./scripts/push-to-ecr.sh ${REGION} ${REPO_NAME} ${IMAGE_TAG} /path/to/app"
   exit 1
 fi
 

@@ -32,6 +32,12 @@ terraform.rc
 charts/**/charts/
 charts/**/*.tgz
 
+# Django app (lesson-7/app)
+__pycache__/
+*.pyc
+lesson-7/app/.env
+db.sqlite3
+
 # macOS / editor cruft
 .DS_Store
 .idea/

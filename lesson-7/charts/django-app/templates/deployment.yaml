@@ -17,8 +17,10 @@ spec:
       labels:
         {{- include "django-app.selectorLabels" . | nindent 8 }}
       annotations:
-        # Roll the pods automatically whenever the ConfigMap content changes.
+        # Roll the pods automatically whenever the ConfigMap or Secret content
+        # changes.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "django-app.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
@@ -33,10 +35,13 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
-          # Inject every key of the ConfigMap (theme-4 env vars) as env vars.
+          # Inject every key of the ConfigMap (non-secret) and Secret
+          # (sensitive) theme-4 env vars.
           envFrom:
             - configMapRef:
                 name: {{ include "django-app.configMapName" . }}
+            - secretRef:
+                name: {{ include "django-app.secretName" . }}
           # startupProbe gives the app time to boot (run migrations, wait for
           # Postgres) before liveness/readiness kick in, so a slow start never
           # triggers a restart loop.

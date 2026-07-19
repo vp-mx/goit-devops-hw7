@@ -26,12 +26,11 @@ serviceAccount:
   annotations: {}
 
 # ---------------------------------------------------------------------------
-# ConfigMap: environment variables carried over from theme 4 (see
+# ConfigMap: NON-secret environment variables carried over from theme 4 (see
 # goit-devops-hw/.env.example). Rendered into a ConfigMap and injected into
 # the pod with envFrom.
 # ---------------------------------------------------------------------------
 config:
-  DJANGO_SECRET_KEY: "change-me-in-production"
   DJANGO_DEBUG: "0"
   DJANGO_ALLOWED_HOSTS: "*"
 
@@ -40,9 +39,19 @@ config:
   # has no SQLite fallback and queries the database on every request.
   POSTGRES_DB: "app_db"
   POSTGRES_USER: "app_user"
-  POSTGRES_PASSWORD: "change-me"
   POSTGRES_HOST: "REPLACE_WITH_POSTGRES_HOST"
   POSTGRES_PORT: "5432"
+
+# ---------------------------------------------------------------------------
+# Secret: SENSITIVE environment variables carried over from theme 4. Rendered
+# into a Kubernetes Secret (base64-encoded at rest) and injected into the pod
+# with envFrom, same mechanism as the ConfigMap above — different resource
+# type. Override these with --set or a gitignored values file; never commit
+# real values here.
+# ---------------------------------------------------------------------------
+secrets:
+  DJANGO_SECRET_KEY: "change-me-in-production"
+  POSTGRES_PASSWORD: "change-me"
 
 # ---------------------------------------------------------------------------
 # Service: type LoadBalancer so AWS provisions an external load balancer with

@@ -66,3 +66,10 @@ Name of the ConfigMap.
 {{- define "django-app.configMapName" -}}
 {{- printf "%s-config" (include "django-app.fullname" .) }}
 {{- end }}
+
+{{/*
+Name of the Secret.
+*/}}
+{{- define "django-app.secretName" -}}
+{{- printf "%s-secret" (include "django-app.fullname" .) }}
+{{- end }}
