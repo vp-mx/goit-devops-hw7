@@ -73,6 +73,13 @@ destroy: ## Destroy everything. Run `make helm-uninstall` first to remove the Lo
 clean: ## Remove local Terraform working files
 	rm -rf .terraform terraform.tfstate terraform.tfstate.backup backend.tf.disabled
 
+total-cleanup: ## Fix backend state error after make destroy by cleaning up local and remote state
+	rm -rf .terraform
+	terraform init -backend=false
+	terraform destroy -auto-approve $(TF_VARS)
+	mv backend.tf.disabled backend.tf || true
+	$(MAKE) clean
+
 # ---------------------------------------------------------------------------
 # Kubernetes / image
 # ---------------------------------------------------------------------------
