@@ -48,3 +48,6 @@ db.sqlite3
 .DS_Store
 .idea/
 .vscode/
+
+# Claude context
+CLAUDE.md
