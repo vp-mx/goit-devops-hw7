@@ -28,6 +28,12 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# Backend bootstrap: backend.tf gets renamed out of the way temporarily by
+# `make bootstrap`/`make destroy` (see README). If a run is interrupted this
+# is what's left behind — safe to ignore, restore with:
+#   mv backend.tf.disabled backend.tf
+backend.tf.disabled
+
 # Helm
 charts/**/charts/
 charts/**/*.tgz

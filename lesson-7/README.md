@@ -110,13 +110,32 @@ make bootstrap
 `make bootstrap` runs, in order:
 
 ```bash
-terraform init -backend=false                         # local state
-terraform apply -target=module.s3_backend -auto-approve   # create the bucket
-terraform init -migrate-state -force-copy \            # now point at S3...
+mv backend.tf backend.tf.disabled                      # hide the backend block
+terraform init -input=false                             # local state
+terraform apply -target=module.s3_backend -auto-approve  # create the bucket
+mv backend.tf.disabled backend.tf                       # restore it
+terraform init -migrate-state -force-copy \              # now point at S3...
   -backend-config="bucket=lesson-7-tfstate-$(aws sts get-caller-identity --query Account --output text)" \
   -backend-config="region=eu-north-1"
-terraform apply                                        # ...and migrate the state into it
+terraform apply                                          # ...and migrate the state into it
 ```
+
+> **Why rename the file instead of `terraform init -backend=false`?** On
+> some Terraform CLI versions `-backend=false` doesn't reliably persist
+> across separate command invocations — a later `terraform apply` in the
+> same directory can still error with *"Backend initialization required...
+> Reason: Initial configuration of the requested backend 's3'"* even though
+> you already ran `init -backend=false`. Temporarily renaming `backend.tf`
+> away removes the backend block from the configuration entirely, so
+> Terraform has nothing to reconcile — the same trick used in lesson-5. If
+> you hit that error anyway (e.g. after `make clean` mid-bootstrap), fix it
+> with:
+> ```bash
+> rm -rf .terraform
+> mv backend.tf backend.tf.disabled 2>/dev/null; true
+> terraform init -input=false
+> ```
+> and re-run `make bootstrap`.
 
 EKS cluster creation typically takes **10–15 minutes**.
 
@@ -371,7 +390,7 @@ kubectl describe certificate django-app-tls
 
 | # | Критерій | Де перевірити |
 |---|---|---|
-| 1 | `terraform plan` без помилок | `cd lesson-7 && terraform init -backend=false && terraform validate` |
+| 1 | `terraform plan` без помилок | `cd lesson-7 && make validate` (тимчасово ховає `backend.tf` і робить `terraform validate`) |
 | 2 | EKS + node group існують, 3 IAM-політики на нодах, `max_size > 1` | `modules/eks/iam.tf` (3 `aws_iam_role_policy_attachment.node_*`), `variables.tf#node_max_size=4` |
 | 3 | Усі 4 шаблони рендеряться | `helm template . charts/django-app \| grep -E "^kind:"` → має вивести Deployment, Service, ConfigMap, Secret, HorizontalPodAutoscaler, ServiceAccount |
 | 4 | `resources.requests.cpu` у deployment.yaml | `values.yaml#resources.requests.cpu: 100m`, `templates/deployment.yaml` → `toYaml .Values.resources` |

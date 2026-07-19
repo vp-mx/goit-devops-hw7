@@ -36,8 +36,10 @@ fmt: ## Format all Terraform files
 	terraform fmt -recursive
 
 validate: ## Validate the configuration without touching AWS
-	terraform init -backend=false
+	mv backend.tf backend.tf.disabled
+	terraform init -input=false || (mv backend.tf.disabled backend.tf && exit 1)
 	terraform validate
+	mv backend.tf.disabled backend.tf
 
 plan: ## Show the execution plan
 	terraform plan $(TF_VARS)
@@ -45,21 +47,31 @@ plan: ## Show the execution plan
 apply: ## Create or update the infrastructure (VPC + ECR + EKS)
 	terraform apply $(TF_VARS)
 
+# Bootstrap works around the chicken-and-egg problem: backend.tf points at an
+# S3 bucket this same code creates, so the very first `terraform init` can't
+# talk to a backend that doesn't exist yet. `-backend=false` is unreliable
+# for this across separate CLI invocations on recent Terraform versions (it
+# does not always "stick"), so instead we temporarily rename backend.tf out
+# of the way — the same approach used in lesson-5.
 bootstrap: ## First run: create the S3 backend, then migrate the state into it
-	terraform init -backend=false
+	mv backend.tf backend.tf.disabled
+	terraform init -input=false
 	terraform apply -target=module.s3_backend -auto-approve $(TF_VARS)
+	mv backend.tf.disabled backend.tf
 	terraform init -migrate-state -force-copy $(BACKEND_CONFIG)
 	terraform apply -auto-approve $(TF_VARS)
 
 destroy: ## Destroy everything. Run `make helm-uninstall` first to remove the LoadBalancer.
 	terraform destroy -target=module.eks -target=module.vpc -target=module.ecr -auto-approve $(TF_VARS)
 	terraform state pull > terraform.tfstate
-	terraform init -reconfigure -backend=false -input=false
+	mv backend.tf backend.tf.disabled
+	terraform init -input=false
 	terraform destroy -auto-approve $(TF_VARS)
+	mv backend.tf.disabled backend.tf
 	rm -f terraform.tfstate terraform.tfstate.backup
 
 clean: ## Remove local Terraform working files
-	rm -rf .terraform terraform.tfstate terraform.tfstate.backup
+	rm -rf .terraform terraform.tfstate terraform.tfstate.backup backend.tf.disabled
 
 # ---------------------------------------------------------------------------
 # Kubernetes / image
