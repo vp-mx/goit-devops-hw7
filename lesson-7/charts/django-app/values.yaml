@@ -1,0 +1,103 @@
+# Default values for the django-app chart.
+# Override any of these with --set key=value or -f my-values.yaml.
+
+# Number of pods when the autoscaler is OFF. When autoscaling.enabled is true
+# the HPA owns the replica count and this value is ignored.
+replicaCount: 2
+
+image:
+  # Set this to your ECR repository URL, printed by:
+  #   terraform output -raw ecr_repository_url
+  # e.g. 123456789012.dkr.ecr.eu-north-1.amazonaws.com/lesson-7-ecr
+  repository: REPLACE_WITH_ECR_REPOSITORY_URL
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Optional image pull secrets. Not needed on EKS: the node IAM role has
+# AmazonEC2ContainerRegistryReadOnly, so the kubelet pulls from ECR directly.
+imagePullSecrets: []
+
+nameOverride: "django-app"
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# ConfigMap: environment variables carried over from theme 4 (see
+# goit-devops-hw/.env.example). Rendered into a ConfigMap and injected into
+# the pod with envFrom.
+# ---------------------------------------------------------------------------
+config:
+  DJANGO_SECRET_KEY: "change-me-in-production"
+  DJANGO_DEBUG: "0"
+  DJANGO_ALLOWED_HOSTS: "*"
+
+  # PostgreSQL connection settings (theme 4). Point POSTGRES_HOST at a
+  # reachable Postgres instance (e.g. Amazon RDS in the same VPC) — the app
+  # has no SQLite fallback and queries the database on every request.
+  POSTGRES_DB: "app_db"
+  POSTGRES_USER: "app_user"
+  POSTGRES_PASSWORD: "change-me"
+  POSTGRES_HOST: "REPLACE_WITH_POSTGRES_HOST"
+  POSTGRES_PORT: "5432"
+
+# ---------------------------------------------------------------------------
+# Service: type LoadBalancer so AWS provisions an external load balancer with
+# a public DNS name / IP for external access.
+# ---------------------------------------------------------------------------
+service:
+  type: LoadBalancer
+  port: 80 # port exposed by the load balancer; forwards to the container's http port
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Horizontal Pod Autoscaler: scale between 2 and 6 pods, target 70% CPU.
+# Requires metrics-server in the cluster and resource requests below.
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# Resource requests/limits. The CPU *request* is what the HPA percentage is
+# measured against, so it must be set for the autoscaler to work.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Container port Django's runserver listens on inside the pod (see Dockerfile).
+containerPort: 8000
+
+# Liveness/readiness/startup probes hit "/" — the only route the app exposes
+# (core.views.index), which also proves the DB connection works.
+probes:
+  path: /
+
+# ---------------------------------------------------------------------------
+# Ingress (BONUS): disabled by default. Enable to expose the app over a custom
+# domain with TLS via cert-manager. Requires an ingress controller (nginx) and
+# cert-manager with a ClusterIssuer installed in the cluster. See README.md
+# for the full walkthrough with a Cloudflare-managed domain.
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: nginx
+  host: yourdomain.com
+  path: /
+  pathType: Prefix
+  tls: true
+  clusterIssuer: letsencrypt-prod
+  annotations: {}
+
+# Extra pod scheduling controls (optional).
+nodeSelector: {}
+tolerations: []
+affinity: {}
