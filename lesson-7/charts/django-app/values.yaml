@@ -74,7 +74,7 @@ postgresql:
     # Requires the EBS CSI driver add-on (installed by modules/eks) so the
     # PVC actually binds. Set to false to use an ephemeral emptyDir instead
     # (data lost on pod restart — fine for a quick smoke test).
-    enabled: true
+    enabled: false
     size: 5Gi
     storageClassName: gp2
   # Kept small on purpose: the default node_instance_types (t3.micro, 1GiB

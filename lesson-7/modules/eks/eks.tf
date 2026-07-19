@@ -111,18 +111,3 @@ resource "aws_eks_addon" "kube_proxy" {
   depends_on = [aws_eks_node_group.this]
 }
 
-# EBS CSI driver: required for PersistentVolumeClaims to actually provision
-# and attach EBS volumes on modern EKS (the in-tree "kubernetes.io/aws-ebs"
-# provisioner is migrated to this driver automatically once it's installed).
-# Used by the Helm chart's in-cluster Postgres StatefulSet.
-resource "aws_eks_addon" "ebs_csi" {
-  cluster_name                = aws_eks_cluster.this.name
-  addon_name                  = "aws-ebs-csi-driver"
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
-
-  depends_on = [
-    aws_eks_node_group.this,
-    aws_iam_role_policy_attachment.node_ebs_csi,
-  ]
-}
