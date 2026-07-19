@@ -116,9 +116,9 @@ variable "git_repo_url" {
 }
 
 variable "git_branch" {
-  description = "Branch Jenkins pushes to and Argo CD tracks for deployments"
+  description = "Branch Jenkins pushes to and Argo CD tracks for deployments. Defaults to lesson-8-9 (the branch graded for this assignment) rather than main — switch back to main once lesson-8-9 is merged."
   type        = string
-  default     = "main"
+  default     = "lesson-8-9"
 }
 
 variable "github_username" {

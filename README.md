@@ -176,7 +176,7 @@ Log in and confirm `seed-job` ran once at startup (**Manage Jenkins → System L
 1. **Build & Push Docker Image** — runs `app/Dockerfile` through Kaniko (as the `jenkins-sa` pod, using IRSA — no AWS keys stored anywhere) and pushes `<ecr-repo>:v1.0.<build-number>` and `:latest` to ECR.
 2. **Update Chart Tag in Git** — `sed`s the new tag into `charts/django-app/values.yaml#image.tag`, commits, and pushes to the tracked branch using the `github-token` credential.
 
-Watch the build's console output for both stages; a green build means the tag-bump commit is now on `main`.
+Watch the build's console output for both stages; a green build means the tag-bump commit is now on the tracked branch (`git_branch`, default `lesson-8-9` — the branch graded for this assignment; switch to `main` once it's merged).
 
 **Open Argo CD and watch it pick up the commit:**
 
