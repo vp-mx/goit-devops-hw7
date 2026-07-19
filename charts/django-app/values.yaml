@@ -26,7 +26,7 @@ serviceAccount:
   annotations: {}
 
 # ---------------------------------------------------------------------------
-# ConfigMap: NON-secret environment variables carried over from theme 4 (see
+# ConfigMap: NON-secret environment variables (see
 # goit-devops-hw/.env.example). Rendered into a ConfigMap and injected into
 # the pod with envFrom.
 # ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ config:
   DJANGO_DEBUG: "0"
   DJANGO_ALLOWED_HOSTS: "*"
 
-  # PostgreSQL connection settings (theme 4). POSTGRES_HOST is NOT listed
+  # PostgreSQL connection settings. POSTGRES_HOST is NOT listed
   # here on purpose: templates/configmap.yaml sets it automatically to the
   # in-cluster Postgres below when postgresql.enabled=true. If you disable
   # postgresql and point at an external database instead (e.g. Amazon RDS),
@@ -44,7 +44,7 @@ config:
   POSTGRES_PORT: "5432"
 
 # ---------------------------------------------------------------------------
-# Secret: SENSITIVE environment variables carried over from theme 4. Rendered
+# Secret: SENSITIVE environment variables. Rendered
 # into a Kubernetes Secret (base64-encoded at rest) and injected into the pod
 # with envFrom, same mechanism as the ConfigMap above — different resource
 # type. Override these with --set or a gitignored values file; never commit
@@ -55,7 +55,7 @@ secrets:
   POSTGRES_PASSWORD: "change-me"
 
 # ---------------------------------------------------------------------------
-# In-cluster PostgreSQL (like theme 4's docker-compose "db" service): a
+# In-cluster PostgreSQL: a
 # single-replica StatefulSet + headless Service, deployed by this same chart
 # so `helm install` works with zero extra setup. It reuses the ConfigMap and
 # Secret above for its own POSTGRES_DB/USER/PASSWORD — one source of truth

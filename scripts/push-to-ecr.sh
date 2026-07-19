@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# Build the Django image (theme 4, vendored into ../app of this repo) and
+# Build the Django image (located in ../app of this repo) and
 # push it to ECR.
 #
 # Usage:
 #   ./scripts/push-to-ecr.sh [REGION] [REPO_NAME] [IMAGE_TAG] [APP_DIR]
 #
 # Defaults: REGION=eu-north-1  REPO_NAME=lesson-7-ecr  IMAGE_TAG=latest
-#           APP_DIR=../app (the Django project + Dockerfile, vendored into
-#           this repo so CI (theme 9) can build it without depending on the
-#           theme-4 repo being checked out alongside this one).
+#           APP_DIR=../app (the Django project + Dockerfile).
 #
 # The account id and registry host are resolved automatically from the active
 # AWS credentials, so anyone can run this against their own account without

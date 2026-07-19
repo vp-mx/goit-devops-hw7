@@ -22,7 +22,7 @@ module "vpc" {
   cluster_name        = local.cluster_name
 }
 
-# Container registry for the Django Docker image built in theme 4.
+# Container registry for the Django Docker image.
 module "ecr" {
   source       = "./modules/ecr"
   ecr_name     = "${var.project}-ecr"

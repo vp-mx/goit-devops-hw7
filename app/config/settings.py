@@ -1,5 +1,5 @@
 """
-Minimal Django settings for the Docker/Nginx/PostgreSQL homework.
+Minimal Django settings for the Docker/Nginx/PostgreSQL setup.
 All secrets/config come from environment variables (see .env.example).
 """
 import os

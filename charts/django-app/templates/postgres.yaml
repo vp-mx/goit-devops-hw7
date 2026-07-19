@@ -1,5 +1,5 @@
 {{- if .Values.postgresql.enabled }}
-# In-cluster PostgreSQL for the Django app — the same role theme 4's
+# In-cluster PostgreSQL for the Django app
 # docker-compose "db" service played, now running as a Kubernetes
 # StatefulSet so `helm install` works without any external database. Reuses
 # the app's own ConfigMap/Secret for POSTGRES_DB/USER/PASSWORD (the official

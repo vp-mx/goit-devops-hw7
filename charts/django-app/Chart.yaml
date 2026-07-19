@@ -1,6 +1,6 @@
 apiVersion: v2
 name: django-app
-description: Helm chart that deploys the Django application from theme 4 on Amazon EKS, with a ConfigMap for its environment, a LoadBalancer Service and a Horizontal Pod Autoscaler.
+description: Helm chart that deploys the Django application on Amazon EKS, with a ConfigMap for its environment, a LoadBalancer Service and a Horizontal Pod Autoscaler.
 type: application
 
 # Chart version. Bump on every change to the chart itself.

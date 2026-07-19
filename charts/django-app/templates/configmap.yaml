@@ -1,5 +1,5 @@
 # ConfigMap holding the NON-secret application environment variables
-# (transferred from theme 4 — see app/.env.example). Sensitive values
+# (see app/.env.example). Sensitive values
 # (POSTGRES_PASSWORD, DJANGO_SECRET_KEY) live in secret.yaml instead.
 # Injected into the container with `envFrom` in the Deployment.
 apiVersion: v1

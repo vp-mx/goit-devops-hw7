@@ -91,7 +91,7 @@ ecr-login: ## Log Docker in to the account's ECR registry
 		docker login --username AWS --password-stdin \
 		$$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$(REGION).amazonaws.com
 
-docker-push: ## Build the theme-4 Django image and push it to ECR (uses scripts/push-to-ecr.sh)
+docker-push: ## Build the Django image and push it to ECR (uses scripts/push-to-ecr.sh)
 	./scripts/push-to-ecr.sh $(REGION) $(PROJECT)-ecr
 
 metrics-server: ## Install metrics-server (required by the HPA) into kube-system

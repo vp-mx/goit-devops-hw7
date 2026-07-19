@@ -1,7 +1,7 @@
 # Current AWS account, used to scope the repository access policy.
 data "aws_caller_identity" "current" {}
 
-# ECR repository that will hold the Django image (built from theme 4).
+# ECR repository that will hold the Django image.
 resource "aws_ecr_repository" "this" {
   name                 = var.ecr_name
   image_tag_mutability = var.image_tag_mutability
