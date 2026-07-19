@@ -6,9 +6,11 @@ repo** (`app/`, with its own `Dockerfile`) so the CI/CD pipeline built in
 themes 8-9 can build it directly from here — it does not depend on the
 theme-4 repo being checked out anywhere. The image is pushed to ECR and
 deployed onto the cluster with a Helm chart: Deployment, Service
-(LoadBalancer), ConfigMap + Secret, and a Horizontal Pod Autoscaler (2–6
-pods, 70% CPU). A bonus Ingress + cert-manager TLS template is included and
-disabled by default.
+(LoadBalancer), ConfigMap + Secret, a Horizontal Pod Autoscaler (2–6 pods,
+70% CPU), and — like theme 4's docker-compose "db" service — an **in-cluster
+PostgreSQL StatefulSet**, so `helm install` works with zero external setup.
+A bonus Ingress + cert-manager TLS template is included and disabled by
+default.
 
 > This project is a dependency for themes 8-9 (Jenkins + Argo CD) and the
 > final project: they deploy onto this EKS cluster, push to this ECR repo,
@@ -52,6 +54,7 @@ lesson-7/
 │           ├── configmap.yaml     # non-secret env vars
 │           ├── secret.yaml        # POSTGRES_PASSWORD, DJANGO_SECRET_KEY
 │           ├── hpa.yaml
+│           ├── postgres.yaml      # in-cluster Postgres (StatefulSet + Service)
 │           ├── ingress.yaml       # bonus, disabled by default
 │           ├── serviceaccount.yaml
 │           ├── _helpers.tpl
@@ -70,12 +73,14 @@ lesson-7/
   provisioning load balancers.
 - **EKS** — control plane spanning all 6 subnets, a managed node group
   (`node_min_size=2`, `node_max_size=4`, `t3.medium`) in the private
-  subnets, plus the `vpc-cni`, `coredns`, `kube-proxy` add-ons. The node
-  role carries the three required AWS managed policies:
+  subnets, plus the `vpc-cni`, `coredns`, `kube-proxy`, `aws-ebs-csi-driver`
+  add-ons. The node role carries the three required AWS managed policies —
   `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`,
-  `AmazonEC2ContainerRegistryReadOnly` (see `modules/eks/iam.tf`). The
-  identity that runs `terraform apply` is granted cluster-admin
-  automatically (`bootstrap_cluster_creator_admin_permissions`).
+  `AmazonEC2ContainerRegistryReadOnly` — plus `AmazonEBSCSIDriverPolicy` so
+  PersistentVolumeClaims (used by the in-cluster Postgres below) actually
+  bind (see `modules/eks/iam.tf`). The identity that runs `terraform apply`
+  is granted cluster-admin automatically
+  (`bootstrap_cluster_creator_admin_permissions`).
 - **ECR** — one repository (`lesson-7-ecr`) with scan-on-push, a lifecycle
   policy that keeps only the 10 most recent images, and a repository policy
   restricting push/pull to the current AWS account.
@@ -83,8 +88,10 @@ lesson-7/
   overrides this) with `resources.requests.cpu` set (required for the HPA
   to compute a percentage), Service of type `LoadBalancer`, a ConfigMap for
   non-secret env vars, a Secret for `POSTGRES_PASSWORD` /
-  `DJANGO_SECRET_KEY`, both injected via `envFrom`, and an HPA scaling 2→6
-  pods at 70% average CPU utilization.
+  `DJANGO_SECRET_KEY`, both injected via `envFrom`, an HPA scaling 2→6 pods
+  at 70% average CPU utilization, and a single-replica Postgres StatefulSet
+  (`postgresql.enabled: true` by default) with a 5Gi PVC, wired to the same
+  ConfigMap/Secret — `helm install` needs no external database.
 
 ## Prerequisites
 
@@ -174,27 +181,36 @@ Without metrics-server, `kubectl get hpa` will show `<unknown>/70%` forever
 
 ## 5. Deploy the Helm chart
 
+The chart deploys its own Postgres by default, so the only value you *must*
+set is the image:
+
 ```bash
 ECR_URL=$(terraform output -raw ecr_repository_url)
 
 helm upgrade --install django-app charts/django-app \
   --set image.repository=$ECR_URL \
-  --set image.tag=latest \
-  --set config.POSTGRES_HOST=<your-postgres-host> \
-  --set secrets.POSTGRES_PASSWORD=<your-postgres-password> \
-  --set secrets.DJANGO_SECRET_KEY=<your-secret-key>
+  --set image.tag=latest
 ```
 
-(`make helm-install IMAGE=$ECR_URL` does the same for the image, then you can
-`--set` the rest or edit `charts/django-app/values.yaml` directly. Never
-commit real secret values into `values.yaml` — use `--set` or a
-gitignored `-f secrets.local.yaml`.)
+(`make helm-install IMAGE=$ECR_URL` does the same thing.) For anything
+beyond a quick personal test, also override the placeholder secrets:
+
+```bash
+helm upgrade --install django-app charts/django-app \
+  --set image.repository=$ECR_URL \
+  --set image.tag=latest \
+  --set secrets.POSTGRES_PASSWORD=$(openssl rand -hex 16) \
+  --set secrets.DJANGO_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+```
+
+Never commit real secret values into `values.yaml` — use `--set` or a
+gitignored `-f secrets.local.yaml`.
 
 > **ConfigMap vs Secret.** `values.yaml#config` carries the non-sensitive
 > env vars from theme 4 (`DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`,
-> `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_HOST`, `POSTGRES_PORT`) and is
-> rendered into a `ConfigMap` (`templates/configmap.yaml`). The sensitive
-> ones — `POSTGRES_PASSWORD` and `DJANGO_SECRET_KEY` — live under
+> `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PORT`) and is rendered into a
+> `ConfigMap` (`templates/configmap.yaml`). The sensitive ones —
+> `POSTGRES_PASSWORD` and `DJANGO_SECRET_KEY` — live under
 > `values.yaml#secrets` and are rendered into a Kubernetes `Secret`
 > (`templates/secret.yaml`, base64-encoded at rest by Kubernetes). Both are
 > injected into the container the same way, with `envFrom`
@@ -202,15 +218,26 @@ gitignored `-f secrets.local.yaml`.)
 > whenever either one changes (`checksum/config` / `checksum/secret` pod
 > annotations).
 >
-> The theme-4 app has **no SQLite fallback** — every request (including `/`,
-> which the probes use) queries PostgreSQL. `POSTGRES_HOST` must point at a
-> reachable database for the pods to become `Ready` — e.g. an Amazon RDS
-> instance in the same VPC (`module.vpc.private_subnet_ids`), or any Postgres
-> reachable from the cluster. Provisioning RDS is outside this chart's scope
-> (not part of the required deliverables); for a quick manual test you can
-> also run Postgres as a throwaway pod:
-> `kubectl run postgres --image=postgres:16-alpine --env=POSTGRES_PASSWORD=<pwd> --port=5432 --expose`
-> and point `POSTGRES_HOST` at `postgres.default.svc.cluster.local`.
+> **Database.** The theme-4 app has **no SQLite fallback** — every request
+> (including `/`, which the probes use) queries PostgreSQL. This chart
+> deploys its own single-replica Postgres (`templates/postgres.yaml`,
+> `postgresql.enabled: true`), reusing the same ConfigMap/Secret for
+> `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD` — one source of truth,
+> and `POSTGRES_HOST` is computed automatically to point at it
+> (`templates/configmap.yaml`). It needs the `aws-ebs-csi-driver` add-on
+> (already in `modules/eks/eks.tf`) for its PVC to bind.
+>
+> For anything beyond learning/testing — no backups, no HA, no failover —
+> set `postgresql.enabled=false` and point `config.POSTGRES_HOST` at a
+> managed database instead, e.g. Amazon RDS in the same VPC
+> (`module.vpc.private_subnet_ids`):
+> ```bash
+> helm upgrade --install django-app charts/django-app \
+>   --set image.repository=$ECR_URL \
+>   --set postgresql.enabled=false \
+>   --set config.POSTGRES_HOST=<your-rds-endpoint> \
+>   --set secrets.POSTGRES_PASSWORD=<your-rds-password>
+> ```
 
 ## 6. Verify
 
@@ -227,12 +254,15 @@ Open `http://<that-hostname>/` — the app's only route (`core.views.index`)
 returns `{"status": "ok", "message": "Django + PostgreSQL + Nginx are working"}`
 once it can reach Postgres.
 
-Check the ConfigMap/Secret are actually mounted:
+Check the ConfigMap/Secret are actually mounted, and that Postgres is up:
 
 ```bash
 kubectl get configmap django-app-config -o yaml
 kubectl get secret django-app-secret -o yaml   # values are base64, not plaintext
 kubectl exec deploy/django-app -- env | grep -E 'DJANGO_|POSTGRES_'
+
+kubectl get statefulset,pvc -l app.kubernetes.io/instance=django-app
+kubectl logs django-app-postgres-0
 ```
 
 Load-test to see the HPA react:
@@ -392,7 +422,7 @@ kubectl describe certificate django-app-tls
 |---|---|---|
 | 1 | `terraform plan` без помилок | `cd lesson-7 && make validate` (тимчасово ховає `backend.tf` і робить `terraform validate`) |
 | 2 | EKS + node group існують, 3 IAM-політики на нодах, `max_size > 1` | `modules/eks/iam.tf` (3 `aws_iam_role_policy_attachment.node_*`), `variables.tf#node_max_size=4` |
-| 3 | Усі 4 шаблони рендеряться | `helm template . charts/django-app \| grep -E "^kind:"` → має вивести Deployment, Service, ConfigMap, Secret, HorizontalPodAutoscaler, ServiceAccount |
+| 3 | Усі 4 шаблони рендеряться | `helm template . charts/django-app \| grep -E "^kind:"` → має вивести Deployment, Service, ConfigMap, Secret, HorizontalPodAutoscaler, StatefulSet, ServiceAccount |
 | 4 | `resources.requests.cpu` у deployment.yaml | `values.yaml#resources.requests.cpu: 100m`, `templates/deployment.yaml` → `toYaml .Values.resources` |
 | 5 | `values.yaml` має `image.repository` і `image.tag` | `charts/django-app/values.yaml` |
 
@@ -431,4 +461,5 @@ helm template charts/django-app | kubectl apply --dry-run=client -f -   # кор
 | Deployment/Service/HPA через Helm | `charts/django-app/templates/{deployment,service,hpa}.yaml` |
 | ConfigMap + Secret з env з теми 4 | `charts/django-app/templates/{configmap,secret}.yaml` + `values.yaml#config`/`#secrets` |
 | Dockerfile у цьому репо | `app/Dockerfile` |
+| PostgreSQL (як у docker-compose теми 4) | `charts/django-app/templates/postgres.yaml`, `values.yaml#postgresql`, EBS CSI addon у `modules/eks/eks.tf` |
 | Бонус: Ingress + TLS | `charts/django-app/templates/ingress.yaml` (disabled за замовчуванням) |

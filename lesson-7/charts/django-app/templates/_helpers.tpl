@@ -73,3 +73,10 @@ Name of the Secret.
 {{- define "django-app.secretName" -}}
 {{- printf "%s-secret" (include "django-app.fullname" .) }}
 {{- end }}
+
+{{/*
+Name of the in-cluster Postgres StatefulSet/Service (also its DNS hostname).
+*/}}
+{{- define "django-app.postgresFullname" -}}
+{{- printf "%s-postgres" (include "django-app.fullname" .) }}
+{{- end }}

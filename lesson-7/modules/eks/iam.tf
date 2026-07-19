@@ -68,3 +68,14 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   role       = aws_iam_role.node.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
+
+# Lets the EBS CSI driver (installed as a cluster add-on in eks.tf) provision
+# and attach EBS volumes for PersistentVolumeClaims — needed by the in-cluster
+# Postgres StatefulSet in the Helm chart. Attached directly to the node role
+# for simplicity; a production setup would scope this down via IRSA (a
+# dedicated IAM role bound to the aws-ebs-csi-driver's service account)
+# instead of granting it to every pod on the node.
+resource "aws_iam_role_policy_attachment" "node_ebs_csi" {
+  role       = aws_iam_role.node.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}

@@ -1,0 +1,103 @@
+{{- if .Values.postgresql.enabled }}
+# In-cluster PostgreSQL for the Django app — the same role theme 4's
+# docker-compose "db" service played, now running as a Kubernetes
+# StatefulSet so `helm install` works without any external database. Reuses
+# the app's own ConfigMap/Secret for POSTGRES_DB/USER/PASSWORD (the official
+# postgres image reads those env vars directly), so credentials only live in
+# one place.
+#
+# For anything beyond learning/testing, set postgresql.enabled=false and
+# point config.POSTGRES_HOST at a managed database (e.g. Amazon RDS) instead
+# — this StatefulSet has no backups, HA or failover.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "django-app.postgresFullname" . }}
+  labels:
+    {{- include "django-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  serviceName: {{ include "django-app.postgresFullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "django-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "django-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "django-app.configMapName" . }}
+            - secretRef:
+                name: {{ include "django-app.secretName" . }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              # subPath avoids postgres choking on the lost+found directory
+              # some CSI drivers create at the root of a fresh volume.
+              subPath: pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+      {{- if not .Values.postgresql.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.postgresql.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.postgresql.persistence.storageClassName }}
+        storageClassName: {{ .Values.postgresql.persistence.storageClassName }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size }}
+  {{- end }}
+---
+# Headless Service: gives the StatefulSet pod a stable DNS name
+# (<postgres-fullname>.<namespace>.svc.cluster.local, or just
+# <postgres-fullname> from within the same namespace) — this is exactly the
+# hostname templates/configmap.yaml sets POSTGRES_HOST to.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "django-app.postgresFullname" . }}
+  labels:
+    {{- include "django-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  clusterIP: None
+  selector:
+    {{- include "django-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+{{- end }}

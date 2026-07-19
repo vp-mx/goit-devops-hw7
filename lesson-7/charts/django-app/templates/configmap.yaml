@@ -12,3 +12,7 @@ data:
   {{- range $key, $value := .Values.config }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
+  # When this chart's own Postgres is enabled, point at its in-cluster
+  # Service automatically. Otherwise fall back to whatever's configured in
+  # values.yaml#config.POSTGRES_HOST (e.g. an external RDS endpoint).
+  POSTGRES_HOST: {{ ternary (include "django-app.postgresFullname" .) (.Values.config.POSTGRES_HOST | default "" | toString) .Values.postgresql.enabled | quote }}

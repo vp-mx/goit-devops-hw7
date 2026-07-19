@@ -34,12 +34,13 @@ config:
   DJANGO_DEBUG: "0"
   DJANGO_ALLOWED_HOSTS: "*"
 
-  # PostgreSQL connection settings (theme 4). Point POSTGRES_HOST at a
-  # reachable Postgres instance (e.g. Amazon RDS in the same VPC) — the app
-  # has no SQLite fallback and queries the database on every request.
+  # PostgreSQL connection settings (theme 4). POSTGRES_HOST is NOT listed
+  # here on purpose: templates/configmap.yaml sets it automatically to the
+  # in-cluster Postgres below when postgresql.enabled=true. If you disable
+  # postgresql and point at an external database instead (e.g. Amazon RDS),
+  # set it explicitly: --set config.POSTGRES_HOST=<your-rds-endpoint>.
   POSTGRES_DB: "app_db"
   POSTGRES_USER: "app_user"
-  POSTGRES_HOST: "REPLACE_WITH_POSTGRES_HOST"
   POSTGRES_PORT: "5432"
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,37 @@ config:
 secrets:
   DJANGO_SECRET_KEY: "change-me-in-production"
   POSTGRES_PASSWORD: "change-me"
+
+# ---------------------------------------------------------------------------
+# In-cluster PostgreSQL (like theme 4's docker-compose "db" service): a
+# single-replica StatefulSet + headless Service, deployed by this same chart
+# so `helm install` works with zero extra setup. It reuses the ConfigMap and
+# Secret above for its own POSTGRES_DB/USER/PASSWORD — one source of truth
+# for both the app and the database.
+#
+# Set postgresql.enabled=false to skip this and point config.POSTGRES_HOST at
+# an external database (e.g. Amazon RDS) instead — recommended for anything
+# beyond learning/testing, since this Postgres has no backups/HA/failover.
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  persistence:
+    # Requires the EBS CSI driver add-on (installed by modules/eks) so the
+    # PVC actually binds. Set to false to use an ephemeral emptyDir instead
+    # (data lost on pod restart — fine for a quick smoke test).
+    enabled: true
+    size: 5Gi
+    storageClassName: gp2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 # ---------------------------------------------------------------------------
 # Service: type LoadBalancer so AWS provisions an external load balancer with
