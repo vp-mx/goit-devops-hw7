@@ -39,7 +39,7 @@ variable "node_subnet_ids" {
 variable "node_instance_types" {
   description = "EC2 instance types for the worker nodes"
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t3.micro"] # Free Tier eligible; override for more headroom if your account allows it
 }
 
 variable "node_desired_size" {

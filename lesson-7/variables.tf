@@ -68,9 +68,17 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_types" {
+  # t3.micro is Free Tier eligible (unlike t3.small/t3.medium) — AWS rejects
+  # non-eligible types on accounts with the Free Tier restriction enabled:
+  # "InvalidParameterCombination - The specified instance type is not
+  # eligible for Free Tier". If your account doesn't have that restriction,
+  # override with a bigger type for more headroom, e.g.:
+  #   terraform apply -var='node_instance_types=["t3.small"]'
+  # Check what your account is actually allowed with:
+  #   aws ec2 describe-instance-types --filters "Name=free-tier-eligible,Values=true" --query "InstanceTypes[].InstanceType"
   description = "EC2 instance types for the EKS worker nodes"
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t3.micro"]
 }
 
 variable "node_desired_size" {

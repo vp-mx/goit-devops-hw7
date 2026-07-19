@@ -77,13 +77,17 @@ postgresql:
     enabled: true
     size: 5Gi
     storageClassName: gp2
+  # Kept small on purpose: the default node_instance_types (t3.micro, 1GiB
+  # RAM) is Free Tier eligible but tight once kube-proxy/vpc-cni/ebs-csi
+  # DaemonSets and the Django pods are also on the node. Raise these if you
+  # run on bigger nodes.
   resources:
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 128Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      memory: 256Mi
 
 # ---------------------------------------------------------------------------
 # Service: type LoadBalancer so AWS provisions an external load balancer with

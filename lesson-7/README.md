@@ -72,8 +72,10 @@ lesson-7/
   `kubernetes.io/cluster/<name>=shared`) so EKS can auto-discover them when
   provisioning load balancers.
 - **EKS** — control plane spanning all 6 subnets, a managed node group
-  (`node_min_size=2`, `node_max_size=4`, `t3.medium`) in the private
-  subnets, plus the `vpc-cni`, `coredns`, `kube-proxy`, `aws-ebs-csi-driver`
+  (`node_min_size=2`, `node_max_size=4`, `t3.micro` — Free Tier eligible,
+  override with `-var='node_instance_types=["t3.small"]'` if your account
+  allows bigger types) in the private subnets, plus the `vpc-cni`,
+  `coredns`, `kube-proxy`, `aws-ebs-csi-driver`
   add-ons. The node role carries the three required AWS managed policies —
   `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`,
   `AmazonEC2ContainerRegistryReadOnly` — plus `AmazonEBSCSIDriverPolicy` so
@@ -143,6 +145,25 @@ terraform apply                                          # ...and migrate the st
 > terraform init -input=false
 > ```
 > and re-run `make bootstrap`.
+
+> **Node group fails with `AsgInstanceLaunchFailures: ... not eligible for
+> Free Tier`?** Your AWS account has the Free Tier instance restriction
+> enabled, and only Free Tier-eligible types (`t2.micro`/`t3.micro`, region
+> dependent) can be launched — `t3.medium` and even `t3.small` get rejected.
+> The default is already `t3.micro` for this reason. If you already ran
+> `make bootstrap` and it failed partway through (VPC/ECR created, node
+> group failed), just re-run `make bootstrap` — Terraform will pick up where
+> it left off. To check exactly which types your account allows:
+> ```bash
+> aws ec2 describe-instance-types --filters "Name=free-tier-eligible,Values=true" \
+>   --query "InstanceTypes[].InstanceType" --output text
+> ```
+> If your account has no such restriction and you want more headroom (the
+> default `t3.micro` — 1 GiB RAM — is tight once kube-proxy/vpc-cni/ebs-csi
+> DaemonSets and the app pods share a node), override it:
+> ```bash
+> terraform apply -var='node_instance_types=["t3.small"]'
+> ```
 
 EKS cluster creation typically takes **10–15 minutes**.
 
@@ -444,7 +465,9 @@ helm template charts/django-app | kubectl apply --dry-run=client -f -   # кор
 - **CPU/memory requests відсутні** → задані у `values.yaml#resources` і
   прокинуті в `deployment.yaml`.
 - **Замалий `max_size` node group** → `node_min_size=2`, `node_max_size=4`
-  на `t3.medium` (більше за мінімум `min=1/max=3` на `t3.small`).
+  (більше за мінімум `min=1/max=3`). Тип інстансу — `t3.micro` (Free Tier
+  eligible за замовчуванням; збільшіть, якщо акаунт дозволяє, див.
+  troubleshooting нижче).
 - **Секрети в ConfigMap** → `POSTGRES_PASSWORD` і `DJANGO_SECRET_KEY`
   винесені в окремий `Secret` (`templates/secret.yaml`), не в ConfigMap.
 - **Dockerfile залишився в репо теми 4** → застосунок і `Dockerfile`
