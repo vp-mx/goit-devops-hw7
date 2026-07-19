@@ -68,17 +68,24 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_types" {
-  # t3.micro is Free Tier eligible (unlike t3.small/t3.medium) — AWS rejects
-  # non-eligible types on accounts with the Free Tier restriction enabled:
-  # "InvalidParameterCombination - The specified instance type is not
-  # eligible for Free Tier". If your account doesn't have that restriction,
-  # override with a bigger type for more headroom, e.g.:
-  #   terraform apply -var='node_instance_types=["t3.small"]'
+  # t3.micro's pod-per-node limit (AWS VPC CNI, ~4 pods/node) is too small to
+  # fit Django + Postgres + Jenkins + Argo CD across 3 nodes — you'll see
+  # FailedScheduling: "Too many pods" / "Insufficient memory". t3.small
+  # roughly doubles both (2 GiB RAM, ~11 pods/node) and fixes this.
+  #
+  # Free Tier eligibility depends on when your AWS account was created:
+  #   - before 2025-07-15: legacy Free Tier, t2.micro/t3.micro only
+  #     (750 hrs/month) — t3.small WILL be billed.
+  #   - on/after 2025-07-15: "$200 credit / 6 months" Free plan, which does
+  #     cover t3.small.
+  # If your account rejects t3.small with AsgInstanceLaunchFailures, fall
+  # back to t3.micro with more nodes instead:
+  #   terraform apply -var='node_instance_types=["t3.micro"]' -var='node_desired_size=5' -var='node_max_size=6'
   # Check what your account is actually allowed with:
   #   aws ec2 describe-instance-types --filters "Name=free-tier-eligible,Values=true" --query "InstanceTypes[].InstanceType"
   description = "EC2 instance types for the EKS worker nodes"
   type        = list(string)
-  default     = ["t3.micro"]
+  default     = ["t3.small"]
 }
 
 variable "node_desired_size" {

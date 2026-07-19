@@ -189,7 +189,7 @@ kubectl get application django-app -n argocd
 
 `syncPolicy.automated` (`prune: true`, `selfHeal: true`) means Argo CD re-syncs on its own polling interval after the Jenkins push — no manual sync needed, though you can trigger one immediately from the UI (**django-app → SYNC**) if you don't want to wait. Once synced, `kubectl get pods -l app.kubernetes.io/instance=django-app` should show pods running the new tag.
 
-**Capacity note:** Jenkins + Argo CD + Django + Postgres all run on the same `t3.micro` node group (see `node_instance_types`/`node_desired_size` in `variables.tf`). Requests/limits for Jenkins and Argo CD are deliberately small and Argo CD's dex/applicationSet/notifications components are disabled to leave headroom; if pods stay `Pending`, bump `node_desired_size`/`node_max_size` or use a bigger instance type (see the Free Tier note above `node_instance_types`).
+**Capacity note:** Jenkins + Argo CD + Django + Postgres all run on the same node group, sized `t3.small` by default (see `node_instance_types`/`node_desired_size` in `variables.tf`) — `t3.micro` was tried first but its AWS VPC CNI pod-per-node limit (~4 pods/node) is too low to fit everything, producing `FailedScheduling: Too many pods` / `Insufficient memory`. Requests/limits for Jenkins and Argo CD are deliberately small and Argo CD's dex/applicationSet/notifications components are disabled to leave headroom regardless. If pods still stay `Pending`, bump `node_desired_size`/`node_max_size`, or fall back to `t3.micro` with more nodes if your AWS account doesn't cover `t3.small` under its Free Tier (see the note above `node_instance_types` in `variables.tf`).
 
 ## 8. Teardown
 
