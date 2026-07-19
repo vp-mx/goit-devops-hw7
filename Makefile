@@ -20,7 +20,8 @@ TF_VARS        = -var="aws_region=$(REGION)" -var="project=$(PROJECT)"
 .DEFAULT_GOAL := help
 .PHONY: help init fmt validate plan apply bootstrap destroy clean \
         kubeconfig ecr-login docker-push metrics-server \
-        helm-lint helm-template helm-install helm-uninstall status
+        helm-lint helm-template helm-install helm-uninstall status \
+        jenkins-url jenkins-password argocd-url argocd-password argocd-app-status
 
 # ---------------------------------------------------------------------------
 # Terraform
@@ -115,3 +116,21 @@ helm-uninstall: ## Remove the release (also deletes the LoadBalancer / ELB)
 
 status: ## Show pods, service, HPA and the external LoadBalancer address
 	kubectl get pods,svc,hpa -l app.kubernetes.io/instance=$(RELEASE) -n $(NAMESPACE)
+
+# ---------------------------------------------------------------------------
+# CI/CD: Jenkins + Argo CD (theme 8-9)
+# ---------------------------------------------------------------------------
+jenkins-url: ## Print the Jenkins UI's external URL
+	@echo "http://$$(kubectl get svc jenkins -n jenkins -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+
+jenkins-password: ## Print the Jenkins admin password (whatever TF_VAR_jenkins_admin_password was set to)
+	@kubectl get secret jenkins -n jenkins -o jsonpath='{.data.jenkins-admin-password}' | base64 -d; echo
+
+argocd-url: ## Print the Argo CD UI's external URL
+	@echo "https://$$(kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+
+argocd-password: ## Print the Argo CD initial admin password
+	@kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d; echo
+
+argocd-app-status: ## Show the sync/health status of the django-app Argo CD Application
+	kubectl get application django-app -n argocd

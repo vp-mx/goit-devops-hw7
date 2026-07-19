@@ -53,3 +53,25 @@ output "update_kubeconfig_command" {
   description = "Run this to point kubectl at the cluster"
   value       = module.eks.update_kubeconfig_command
 }
+
+# --- Jenkins ---------------------------------------------------------------
+output "jenkins_namespace" {
+  description = "Namespace Jenkins is deployed into"
+  value       = module.jenkins.jenkins_namespace
+}
+
+output "jenkins_url_command" {
+  description = "Command to fetch the Jenkins UI's external URL"
+  value       = module.jenkins.jenkins_url_command
+}
+
+# --- Argo CD -----------------------------------------------------------------
+output "argocd_url_command" {
+  description = "Command to fetch the Argo CD UI's external URL"
+  value       = module.argo_cd.argocd_url_command
+}
+
+output "argocd_admin_password_command" {
+  description = "Command to fetch the Argo CD initial admin password"
+  value       = module.argo_cd.admin_password_command
+}

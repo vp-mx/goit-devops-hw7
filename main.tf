@@ -47,3 +47,41 @@ module "eks" {
   node_min_size       = var.node_min_size
   node_max_size       = var.node_max_size
 }
+
+# ---------------------------------------------------------------------------
+# CI/CD (theme 8-9): Jenkins builds the Django image with Kaniko, pushes it
+# to the ECR repo above, and updates charts/django-app/values.yaml#image.tag
+# in this same Git repo. Argo CD watches that same chart path and syncs the
+# cluster automatically — the Jenkins -> Git -> Argo CD handoff is the whole
+# point of this pipeline.
+# ---------------------------------------------------------------------------
+module "jenkins" {
+  source = "./modules/jenkins"
+
+  cluster_name        = module.eks.cluster_name
+  oidc_provider_arn   = module.eks.oidc_provider_arn
+  oidc_issuer_url     = module.eks.oidc_issuer_url
+  ecr_repository_arn  = module.ecr.ecr_repository_arn
+  ecr_repository_url  = module.ecr.ecr_repository_url
+  admin_password      = var.jenkins_admin_password
+  persistence_enabled = var.jenkins_persistence_enabled
+
+  git_repo_url    = var.git_repo_url
+  git_branch      = var.git_branch
+  github_username = var.github_username
+  github_pat      = var.github_pat
+}
+
+module "argo_cd" {
+  source = "./modules/argo_cd"
+
+  git_repo_url    = var.git_repo_url
+  git_branch      = var.git_branch
+  github_username = var.github_username
+  github_pat      = var.github_pat
+
+  app_chart_path = "charts/django-app"
+  app_namespace  = "default"
+
+  depends_on = [module.eks]
+}

@@ -98,3 +98,42 @@ variable "node_max_size" {
   type        = number
   default     = 4
 }
+
+# ---------------------------------------------------------------------------
+# CI/CD: Jenkins + Argo CD (theme 8-9)
+# ---------------------------------------------------------------------------
+variable "git_repo_url" {
+  description = "HTTPS URL of this Git repository — Jenkins builds app/Dockerfile from it, updates charts/django-app/values.yaml#image.tag and pushes back; Argo CD watches it to deploy charts/django-app"
+  type        = string
+  default     = "https://github.com/vp-mx/goit-devops-hw7.git"
+}
+
+variable "git_branch" {
+  description = "Branch Jenkins pushes to and Argo CD tracks for deployments"
+  type        = string
+  default     = "main"
+}
+
+variable "github_username" {
+  description = "GitHub username for the Personal Access Token below (used by both Jenkins and Argo CD to access the repo)"
+  type        = string
+}
+
+variable "github_pat" {
+  description = "GitHub Personal Access Token (repo scope) — required. Supply via TF_VAR_github_pat env var or a gitignored *.tfvars file; never commit a real value."
+  type        = string
+  sensitive   = true
+}
+
+variable "jenkins_admin_password" {
+  description = "Jenkins admin password. Override for anything beyond a local/learning deployment."
+  type        = string
+  default     = "ChangeMe123!"
+  sensitive   = true
+}
+
+variable "jenkins_persistence_enabled" {
+  description = "Give Jenkins a PersistentVolumeClaim (requires the aws-ebs-csi-driver EKS add-on, currently NOT installed — see modules/eks). Left false by default: on t3.micro nodes, Jenkins + Argo CD + the app already use most of the available capacity, and JCasC/the seed job make Jenkins fully reproducible from code, so losing state on a pod restart isn't a big deal here."
+  type        = bool
+  default     = false
+}

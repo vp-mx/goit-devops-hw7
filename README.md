@@ -1,28 +1,31 @@
-# EKS + ECR + Helm Deployment
+# EKS + ECR + Helm + Jenkins + Argo CD
 
-This repository contains Terraform code to provision an EKS (Kubernetes) cluster and an ECR repository inside a dedicated VPC on AWS. It also includes a Helm chart to deploy a Django application onto the cluster.
+This repository contains Terraform code to provision an EKS (Kubernetes) cluster and an ECR repository inside a dedicated VPC on AWS. It also includes a Helm chart to deploy a Django application onto the cluster, and a full CI/CD pipeline: **Jenkins** builds the Django image with Kaniko and pushes it to ECR, then bumps `charts/django-app/values.yaml#image.tag` and pushes that commit back to this repo; **Argo CD** watches the same repo/path and automatically syncs the cluster to match — Git is the handoff between the two.
 
-The application image is built from the `app/` directory and pushed to ECR. The Helm chart deploys a Deployment, Service (LoadBalancer), ConfigMap, Secret, a Horizontal Pod Autoscaler, and an in-cluster PostgreSQL StatefulSet.
+The application image is built from the `app/` directory. The Helm chart deploys a Deployment, Service (LoadBalancer), ConfigMap, Secret, a Horizontal Pod Autoscaler, and an in-cluster PostgreSQL StatefulSet.
 
 ## Project structure
 
 ```text
-lesson-7/
+goit-devops-hw7/
 │
 ├── main.tf                    # Wires the modules together
 ├── backend.tf                 # State backend configuration (S3 + DynamoDB)
-├── provider.tf                # AWS provider + default tags
+├── provider.tf                # AWS + helm + kubernetes providers
 ├── versions.tf                # Terraform / provider version constraints
 ├── variables.tf               # Root input variables
 ├── locals.tf                  # AZs, state bucket name, cluster name
 ├── outputs.tf                 # Aggregated outputs from all modules
+├── Jenkinsfile                 # Kaniko build+push, then bump chart tag + push to Git
 ├── Makefile                   # `make help` for all common commands
 │
 ├── modules/
 │   ├── s3-backend/            # S3 bucket + DynamoDB table for state
 │   ├── vpc/                   # VPC, public/private subnets, IGW, NAT, routing
 │   ├── ecr/                   # ECR repository for the application image
-│   └── eks/                   # EKS cluster, managed node group, IAM, add-ons
+│   ├── eks/                   # EKS cluster, managed node group, IAM, OIDC provider
+│   ├── jenkins/                # Jenkins via Helm: JCasC, seed job, IRSA for Kaniko
+│   └── argo_cd/                 # Argo CD via Helm + Application/repository-credential chart
 │
 ├── app/                       # Application code + Dockerfile
 │   ├── Dockerfile
@@ -48,7 +51,7 @@ lesson-7/
 │           └── NOTES.txt
 │
 └── scripts/
-    └── push-to-ecr.sh         # Builds app/ and pushes it to ECR
+    └── push-to-ecr.sh         # Builds app/ and pushes it to ECR (manual/first push, before Jenkins takes over)
 ```
 
 ## Architecture
@@ -57,23 +60,33 @@ lesson-7/
 - **EKS** — control plane spanning all 6 subnets, a managed node group in the private subnets, plus necessary add-ons (`vpc-cni`, `coredns`, `kube-proxy`, `aws-ebs-csi-driver`). The node role carries the required AWS managed policies.
 - **ECR** — repository with scan-on-push, a lifecycle policy to keep the 10 most recent images, and an access policy.
 - **Helm chart** — Deployment, Service of type `LoadBalancer`, ConfigMap and Secret for environment variables, an HPA scaling based on CPU utilization, and a single-replica Postgres StatefulSet with a PVC.
+- **Jenkins** (`modules/jenkins`) — installed via the `jenkinsci/jenkins` Helm chart. JCasC provisions a `github-token` credential and a `seed-job` on startup; the seed job runs Job DSL to generate the actual `django-app-pipeline` job from the `Jenkinsfile` in this repo. Builds run as short-lived Kubernetes pod agents (`kaniko` + `git` containers) under a `jenkins-sa` service account bound via IRSA to an IAM role scoped to `ecr:PutImage`/etc. on this project's ECR repo only — no static AWS keys anywhere in Jenkins.
+- **Argo CD** (`modules/argo_cd`) — installed via the official `argo/argo-cd` Helm chart (dex/applicationSet/notifications disabled to save resources), plus a small local chart (`modules/argo_cd/charts`) that declares the `django-app` `Application` CRD (pointing at `charts/django-app` on the tracked branch, `automated: {prune: true, selfHeal: true}`) and a repository-credential `Secret` so Argo CD can pull this (private) repo.
 
 ## Prerequisites
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.5
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.10
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), configured (`aws configure`)
 - `kubectl`, [`helm`](https://helm.sh/docs/intro/install/) >= 3
-- `docker`
+- `docker` (only needed for the manual first push in step 3 — after that, Jenkins builds images itself)
+- A GitHub [Personal Access Token](https://github.com/settings/tokens) (classic, `repo` scope) for the account that owns this repo — Jenkins uses it to push the chart-tag-bump commit, Argo CD uses it to pull the repo.
 
 ## 1. Bootstrap the Terraform backend
 
-Run the following command to bootstrap the remote state backend in S3 and DynamoDB:
+`github_username` and `github_pat` have no defaults (Jenkins and Argo CD both need them to read/write this repo) — export them as `TF_VAR_*` env vars so they're picked up automatically by every `terraform`/`make` command below, and never end up typed into a shell history or committed to a `.tfvars` file:
+
+```bash
+export TF_VAR_github_username=<your-github-username>
+export TF_VAR_github_pat=<your-personal-access-token>
+```
+
+Then bootstrap the remote state backend in S3 and DynamoDB:
 
 ```bash
 make bootstrap
 ```
 
-This command will initialize the backend, create the S3 bucket and DynamoDB table, and then migrate the state automatically. EKS cluster creation typically takes **10–15 minutes**.
+This command will initialize the backend, create the S3 bucket and DynamoDB table, and then migrate the state automatically. It also creates the EKS cluster, ECR repo, Jenkins and Argo CD in the same run. EKS cluster creation typically takes **10–15 minutes**; Jenkins/Argo CD come up a couple of minutes after that.
 
 ## 2. Point kubectl at the cluster
 
@@ -84,7 +97,9 @@ aws eks update-kubeconfig --name lesson-7-eks --region eu-north-1
 kubectl get nodes
 ```
 
-## 3. Push the application image to ECR
+## 3. Push the application image to ECR (first time only)
+
+Jenkins builds and pushes every image from here on (see step 7); this manual push is only needed once, to have something for the very first `helm install` in step 5 to deploy.
 
 ```bash
 make docker-push
@@ -136,9 +151,39 @@ kubectl run load-gen --image=busybox --restart=Never -- \
 kubectl get hpa django-app -w
 ```
 
-## 7. Teardown
+## 7. CI/CD: run the Jenkins pipeline, watch Argo CD sync
 
-To destroy the infrastructure, remove the Helm release first, then use the make command to tear down the infrastructure and the state bucket:
+Jenkins and Argo CD are both installed and configured by the same `make bootstrap` / `terraform apply` from step 1 — nothing extra to install by hand.
+
+**Open Jenkins:**
+
+```bash
+make jenkins-url        # external LoadBalancer hostname
+make jenkins-password   # admin / <this password>, or TF_VAR_jenkins_admin_password if you overrode it
+```
+
+Log in and confirm `seed-job` ran once at startup (**Manage Jenkins → System Log**, or just check that a job called `django-app-pipeline` already exists — JCasC creates it automatically, no manual clicking required). Open `django-app-pipeline` → **Build Now**. The pipeline:
+1. **Build & Push Docker Image** — runs `app/Dockerfile` through Kaniko (as the `jenkins-sa` pod, using IRSA — no AWS keys stored anywhere) and pushes `<ecr-repo>:v1.0.<build-number>` and `:latest` to ECR.
+2. **Update Chart Tag in Git** — `sed`s the new tag into `charts/django-app/values.yaml#image.tag`, commits, and pushes to the tracked branch using the `github-token` credential.
+
+Watch the build's console output for both stages; a green build means the tag-bump commit is now on `main`.
+
+**Open Argo CD and watch it pick up the commit:**
+
+```bash
+make argocd-url         # external LoadBalancer hostname
+make argocd-password    # initial admin password (user: admin)
+make argocd-app-status  # sync/health status from the CLI, e.g.:
+kubectl get application django-app -n argocd
+```
+
+`syncPolicy.automated` (`prune: true`, `selfHeal: true`) means Argo CD re-syncs on its own polling interval after the Jenkins push — no manual sync needed, though you can trigger one immediately from the UI (**django-app → SYNC**) if you don't want to wait. Once synced, `kubectl get pods -l app.kubernetes.io/instance=django-app` should show pods running the new tag.
+
+**Capacity note:** Jenkins + Argo CD + Django + Postgres all run on the same `t3.micro` node group (see `node_instance_types`/`node_desired_size` in `variables.tf`). Requests/limits for Jenkins and Argo CD are deliberately small and Argo CD's dex/applicationSet/notifications components are disabled to leave headroom; if pods stay `Pending`, bump `node_desired_size`/`node_max_size` or use a bigger instance type (see the Free Tier note above `node_instance_types`).
+
+## 8. Teardown
+
+To destroy the infrastructure, remove the `django-app` Helm release first (Jenkins/Argo CD are Terraform-managed `helm_release` resources, so `make destroy` cleans those — and their LoadBalancers — up on its own):
 
 ```bash
 helm uninstall django-app

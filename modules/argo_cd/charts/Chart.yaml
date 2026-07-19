@@ -1,0 +1,6 @@
+apiVersion: v2
+name: argo-apps
+description: Argo CD Application(s) and repository credentials for the django-app Helm chart in this same repo
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
