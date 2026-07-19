@@ -69,9 +69,9 @@ variable "kubernetes_version" {
 
 variable "node_instance_types" {
   # t3.micro's pod-per-node limit (AWS VPC CNI, ~4 pods/node) is too small to
-  # fit Django + Postgres + Jenkins + Argo CD across 3 nodes — you'll see
+  # fit Django + Postgres + Jenkins + Argo CD across 3 nodes, producing
   # FailedScheduling: "Too many pods" / "Insufficient memory". t3.small
-  # roughly doubles both (2 GiB RAM, ~11 pods/node) and fixes this.
+  # roughly doubles both (2 GiB RAM, ~11 pods/node) and avoids this.
   #
   # Free Tier eligibility depends on when your AWS account was created:
   #   - before 2025-07-15: legacy Free Tier, t2.micro/t3.micro only
@@ -116,7 +116,7 @@ variable "git_repo_url" {
 }
 
 variable "git_branch" {
-  description = "Branch Jenkins pushes to and Argo CD tracks for deployments. Defaults to lesson-8-9 (the branch graded for this assignment) rather than main — switch back to main once lesson-8-9 is merged."
+  description = "Branch Jenkins pushes the image-tag-bump commit to and Argo CD tracks for deployments."
   type        = string
   default     = "lesson-8-9"
 }

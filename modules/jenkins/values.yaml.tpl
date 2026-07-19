@@ -8,20 +8,19 @@ controller:
     username: ${admin_username}
     password: ${admin_password}
 
-  # NOTE: these are top-level controller.* fields per the actual jenkinsci/jenkins
-  # chart schema (verified against the chart source) -- there is no nested
-  # controller.service.* object; an earlier version of this file had one and
-  # it was silently ignored (Helm doesn't validate unknown keys).
+  # NOTE: these are top-level controller.* fields per the jenkinsci/jenkins
+  # chart schema -- there is no nested controller.service.* object. Helm
+  # does not validate unknown keys, so a wrong key here fails silently
+  # instead of erroring.
   serviceType: LoadBalancer
   servicePort: 80
   targetPort: 8080
 
-  # Explicit heap size: the JVM's container-aware default sizing left too
-  # little headroom during plugin loading (kubernetes, workflow-aggregator,
-  # git, configuration-as-code, github, job-dsl all init at once on first
-  # boot) and the controller got OOMKilled repeatedly. -Xmx must stay well
-  # under resources.limits.memory to leave room for non-heap/metaspace/JVM
-  # overhead.
+  # Explicit heap size: the JVM's container-aware default sizing leaves too
+  # little headroom when several plugins (kubernetes, workflow-aggregator,
+  # git, configuration-as-code, github, job-dsl) initialize at once on first
+  # boot, which can OOM-kill the controller. -Xmx must stay well under
+  # resources.limits.memory to leave room for non-heap/metaspace/JVM overhead.
   javaOpts: "-Xmx1024m -Xms512m"
 
   resources:
@@ -42,8 +41,8 @@ controller:
     - job-dsl:latest
 
   # JCasC: describes Jenkins' desired configuration as code, applied on
-  # every controller start. This is what makes the seed job / GitHub
-  # credentials reappear automatically even if the pod restarts and
+  # every controller start. This is what makes the GitHub credential and
+  # the pipeline job reappear automatically even if the pod restarts and
   # persistence is disabled.
   JCasC:
     defaultConfig: true
@@ -60,14 +59,13 @@ controller:
                       password: "${github_pat}"
                       description: GitHub PAT (repo read/write)
       pipeline-jobs: |
-        # JCasC's own "jobs:" key IS the seeding mechanism -- it runs this
-        # Job DSL script directly at controller boot/reload, fully trusted,
-        # no Script Approval involved. No separate "seed-job" freestyle job
-        # or nested "Process Job DSLs" build step needed (an earlier version
-        # of this file used that pattern and hit two problems: the nested
-        # dsl-step runs unsandboxed and needs manual approval, and it's a
-        # different Groovy DSL context where sandbox(true) isn't even a
-        # valid method -- calling it crashed Jenkins at boot entirely).
+        # JCasC's own "jobs:" key IS the seeding mechanism: it runs this Job
+        # DSL script directly at controller boot/reload, fully trusted, no
+        # Script Approval involved. Do not reintroduce this via a separate
+        # "seed-job" freestyle job with a nested "Process Job DSLs" build
+        # step -- that step runs unsandboxed (needs manual Script Approval)
+        # and uses a different Groovy DSL context where sandbox(true) is not
+        # a valid method call and will crash Jenkins at boot.
         jobs:
           - script: >
               pipelineJob("django-app-pipeline") {

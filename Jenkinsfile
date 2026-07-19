@@ -93,19 +93,11 @@ spec:
             sh '''
               set -eu
 
-              echo "PWD: $(pwd)"
-              if [ -d .git ]; then
-                echo ".git present"
-              else
-                echo ".git MISSING -- listing workspace root:"
-                ls -la
-              fi
-
               # The checkout happened in a different container of this same
-              # pod (workspace is shared via the same emptyDir volume, but
-              # git refuses to touch a repo it thinks it doesn't own across
-              # that boundary) -- mark it safe rather than fighting UID
-              # mismatches between containers.
+              # pod. The workspace is shared via the same emptyDir volume,
+              # but git refuses to operate on a repo it doesn't recognize as
+              # owned by the current user across that container boundary --
+              # mark it safe rather than fighting UID mismatches.
               git config --global --add safe.directory "$(pwd)"
 
               sed -i "s/^  tag: .*/  tag: ${IMAGE_TAG}/" charts/django-app/values.yaml

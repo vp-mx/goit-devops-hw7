@@ -176,7 +176,7 @@ Log in and confirm `django-app-pipeline` already exists in the job list — JCas
 1. **Build & Push Docker Image** — runs `app/Dockerfile` through Kaniko (as the `jenkins-sa` pod, using IRSA — no AWS keys stored anywhere) and pushes `<ecr-repo>:v1.0.<build-number>` and `:latest` to ECR.
 2. **Update Chart Tag in Git** — `sed`s the new tag into `charts/django-app/values.yaml#image.tag`, commits, and pushes to the tracked branch using the `github-token` credential.
 
-Watch the build's console output for both stages; a green build means the tag-bump commit is now on the tracked branch (`git_branch`, default `lesson-8-9` — the branch graded for this assignment; switch to `main` once it's merged).
+Watch the build's console output for both stages; a green build means the tag-bump commit is now on the tracked branch (`git_branch`, default `lesson-8-9`; override with `-var git_branch=main` once merged).
 
 **Open Argo CD and watch it pick up the commit:**
 
@@ -189,7 +189,7 @@ kubectl get application django-app -n argocd
 
 `syncPolicy.automated` (`prune: true`, `selfHeal: true`) means Argo CD re-syncs on its own polling interval after the Jenkins push — no manual sync needed, though you can trigger one immediately from the UI (**django-app → SYNC**) if you don't want to wait. Once synced, `kubectl get pods -l app.kubernetes.io/instance=django-app` should show pods running the new tag.
 
-**Capacity note:** Jenkins + Argo CD + Django + Postgres all run on the same node group, sized `t3.small` by default (see `node_instance_types`/`node_desired_size` in `variables.tf`) — `t3.micro` was tried first but its AWS VPC CNI pod-per-node limit (~4 pods/node) is too low to fit everything, producing `FailedScheduling: Too many pods` / `Insufficient memory`. Requests/limits for Jenkins and Argo CD are deliberately small and Argo CD's dex/applicationSet/notifications components are disabled to leave headroom regardless. If pods still stay `Pending`, bump `node_desired_size`/`node_max_size`, or fall back to `t3.micro` with more nodes if your AWS account doesn't cover `t3.small` under its Free Tier (see the note above `node_instance_types` in `variables.tf`).
+**Capacity note:** Jenkins + Argo CD + Django + Postgres all run on the same node group, sized `t3.small` by default (see `node_instance_types`/`node_desired_size` in `variables.tf`) — `t3.micro`'s AWS VPC CNI pod-per-node limit (~4 pods/node) is too low to fit everything together, so `t3.small` (~11 pods/node) is the default instead. Requests/limits for Jenkins and Argo CD are deliberately small and Argo CD's dex/applicationSet/notifications components are disabled to leave headroom regardless. If pods still stay `Pending`, bump `node_desired_size`/`node_max_size`, or fall back to `t3.micro` with more nodes if your AWS account doesn't cover `t3.small` under its Free Tier (see the note above `node_instance_types` in `variables.tf`).
 
 ## 8. Teardown
 

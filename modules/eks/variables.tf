@@ -39,16 +39,9 @@ variable "node_subnet_ids" {
 variable "node_instance_types" {
   description = "EC2 instance types for the worker nodes"
   type        = list(string)
-  # t3.micro's AWS VPC CNI pod-per-node limit (4) is too low to fit Django +
-  # Postgres + Jenkins + Argo CD across 3 nodes ("Too many pods" /
-  # "Insufficient memory" FailedScheduling). t3.small roughly doubles both
-  # memory (2GiB) and the pod limit (~11) per node. Free Tier eligibility
-  # depends on your AWS account: accounts created before 2025-07-15 get the
-  # legacy Free Tier (t2.micro/t3.micro only, 750 hrs/month) and t3.small
-  # WILL be billed; accounts created on/after 2025-07-15 get a $200-credit
-  # "Free plan" for 6 months that does cover t3.small. Fall back to
-  # ["t3.micro"] with a bigger node_desired_size/node_max_size if your
-  # account rejects it with AsgInstanceLaunchFailures.
+  # See the node_instance_types description in the root variables.tf for
+  # the full rationale (pod-per-node limits, Free Tier eligibility by
+  # account age, fallback instructions) -- this default just mirrors it.
   default = ["t3.small"]
 }
 

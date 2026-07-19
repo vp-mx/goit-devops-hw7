@@ -45,7 +45,7 @@ redis:
 dex:
   enabled: false
 
-# We only need plain Applications (declared in ./charts), not ApplicationSets.
+# Plain Applications (declared in ./charts) are sufficient; ApplicationSets are unnecessary.
 applicationSet:
   enabled: false
 
