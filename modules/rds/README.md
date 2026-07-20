@@ -38,8 +38,9 @@ module "rds" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
 
-  # Дозволити доступ лише з нод EKS-кластера
-  allowed_security_group_ids = [module.eks.node_security_group_id]
+  # Дозволити доступ лише з нод EKS-кластера (managed node group успадковує
+  # cluster_security_group_id -- окремого SG для нод модуль eks не створює)
+  allowed_security_group_ids = [module.eks.cluster_security_group_id]
 
   use_aurora      = false
   engine          = "postgres"
@@ -74,7 +75,7 @@ module "rds" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
 
-  allowed_security_group_ids = [module.eks.node_security_group_id]
+  allowed_security_group_ids = [module.eks.cluster_security_group_id]
 
   use_aurora            = true
   engine                = "aurora-postgresql"
