@@ -78,9 +78,7 @@ spec:
               --dockerfile `pwd`/app/Dockerfile \
               --destination=${ECR_REPOSITORY}:${IMAGE_TAG} \
               --destination=${ECR_REPOSITORY}:latest \
-              --cache=true \
-              --insecure \
-              --skip-tls-verify
+              --cache=true
           '''
         }
       }
