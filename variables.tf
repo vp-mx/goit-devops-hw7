@@ -144,3 +144,66 @@ variable "jenkins_persistence_enabled" {
   type        = bool
   default     = false
 }
+
+# ---------------------------------------------------------------------------
+# RDS (lesson-db-module, modules/rds)
+# ---------------------------------------------------------------------------
+variable "rds_enabled" {
+  description = "Create the RDS database (module.rds). Off by default -- it's a real, billable AWS resource (standard RDS is Free Tier eligible on db.t3.micro/single-AZ, Aurora never is). Opt in with -var='rds_enabled=true'."
+  type        = bool
+  default     = false
+}
+
+variable "rds_use_aurora" {
+  description = "true = Aurora Cluster, false = standard single-instance RDS. See modules/rds/README.md for the tradeoffs."
+  type        = bool
+  default     = false
+}
+
+variable "rds_engine" {
+  description = "Database engine passed to module.rds (\"postgres\"/\"mysql\"/... or \"aurora-postgresql\"/\"aurora-mysql\" when rds_use_aurora = true)"
+  type        = string
+  default     = "postgres"
+}
+
+variable "rds_engine_version" {
+  description = "Engine version passed to module.rds"
+  type        = string
+  default     = "16.4"
+}
+
+variable "rds_family" {
+  description = "Parameter group family passed to module.rds -- must match rds_engine/rds_engine_version"
+  type        = string
+  default     = "postgres16"
+}
+
+variable "rds_instance_class" {
+  description = "Instance class passed to module.rds. db.t3.micro is Free Tier eligible for standard RDS; Aurora needs db.t3.medium or larger."
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_multi_az" {
+  description = "Multi-AZ standby for standard RDS (ignored for Aurora -- see modules/rds)"
+  type        = bool
+  default     = false
+}
+
+variable "rds_database_name" {
+  # Matches charts/django-app/values.yaml#config.POSTGRES_DB, so this lines
+  # up if you point the Django app at this RDS instance instead of the
+  # chart's own in-cluster Postgres (--set postgresql.enabled=false --set
+  # config.POSTGRES_HOST=<module.rds address>).
+  description = "Default database name passed to module.rds"
+  type        = string
+  default     = "app_db"
+}
+
+variable "rds_master_username" {
+  # Matches charts/django-app/values.yaml#config.POSTGRES_USER, same reason
+  # as rds_database_name above.
+  description = "Master username passed to module.rds"
+  type        = string
+  default     = "app_user"
+}

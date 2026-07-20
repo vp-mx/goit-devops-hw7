@@ -94,3 +94,45 @@ module "argo_cd" {
 
   depends_on = [module.eks]
 }
+
+# ---------------------------------------------------------------------------
+# RDS (lesson-db-module): flexible standard-RDS/Aurora database module.
+# Off by default (count = var.rds_enabled ? 1 : 0) -- it creates billable,
+# non-Free-Tier-safe resources (t3.micro RDS is Free Tier eligible, but
+# Aurora never is), so it only gets created when explicitly opted into with
+# -var='rds_enabled=true'. Values below mirror charts/django-app/values.yaml
+# (POSTGRES_DB=app_db, POSTGRES_USER=app_user, port 5432) so the two line up
+# if you switch the chart to an external DB per the README's
+# `--set postgresql.enabled=false --set config.POSTGRES_HOST=<rds-endpoint>`
+# flow instead of the chart's own in-cluster Postgres.
+# ---------------------------------------------------------------------------
+module "rds" {
+  source = "./modules/rds"
+  count  = var.rds_enabled ? 1 : 0
+
+  identifier = "${var.project}-db"
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnet_ids
+
+  # Managed node groups (modules/eks) don't get their own security group --
+  # nodes use the cluster's, so this is the right SG to allow DB access from.
+  allowed_security_group_ids = [module.eks.cluster_security_group_id]
+
+  use_aurora     = var.rds_use_aurora
+  engine         = var.rds_engine
+  engine_version = var.rds_engine_version
+  family         = var.rds_family
+  instance_class = var.rds_instance_class
+  multi_az       = var.rds_multi_az
+
+  database_name   = var.rds_database_name
+  master_username = var.rds_master_username
+  # master_password left unset -- the module generates and stores one in state
+
+  tags = {
+    Project = var.project
+  }
+
+  depends_on = [module.eks]
+}

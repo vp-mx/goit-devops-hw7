@@ -75,3 +75,15 @@ output "argocd_admin_password_command" {
   description = "Command to fetch the Argo CD initial admin password"
   value       = module.argo_cd.admin_password_command
 }
+
+# --- RDS (only set when rds_enabled = true) ---------------------------------
+output "rds_endpoint" {
+  description = "Database connection endpoint (host:port). null when rds_enabled = false."
+  value       = var.rds_enabled ? module.rds[0].endpoint : null
+}
+
+output "rds_master_password" {
+  description = "Database master password (auto-generated unless overridden). null when rds_enabled = false. Read with: terraform output -raw rds_master_password"
+  value       = var.rds_enabled ? module.rds[0].master_password : null
+  sensitive   = true
+}
