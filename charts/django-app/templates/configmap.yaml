@@ -1,0 +1,18 @@
+# ConfigMap holding the NON-secret application environment variables
+# (see app/.env.example). Sensitive values
+# (POSTGRES_PASSWORD, DJANGO_SECRET_KEY) live in secret.yaml instead.
+# Injected into the container with `envFrom` in the Deployment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "django-app.configMapName" . }}
+  labels:
+    {{- include "django-app.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  # When this chart's own Postgres is enabled, point at its in-cluster
+  # Service automatically. Otherwise fall back to whatever's configured in
+  # values.yaml#config.POSTGRES_HOST (e.g. an external RDS endpoint).
+  POSTGRES_HOST: {{ ternary (include "django-app.postgresFullname" .) (.Values.config.POSTGRES_HOST | default "" | toString) .Values.postgresql.enabled | quote }}

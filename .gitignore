@@ -1,0 +1,53 @@
+# Local .terraform directories
+.terraform/
+.terraform.lock.hcl
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# .tfvars files are likely to contain sensitive data (passwords, keys) and
+# should not be committed.
+*.tfvars
+*.tfvars.json
+
+# Override files used to override resources locally
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Transient lock info files created by terraform apply
+.terraform.tfstate.lock.info
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Backend bootstrap: backend.tf gets renamed out of the way temporarily by
+# `make bootstrap`/`make destroy` (see README). If a run is interrupted this
+# is what's left behind — safe to ignore, restore with:
+#   mv backend.tf.disabled backend.tf
+backend.tf.disabled
+
+# Helm
+charts/**/charts/
+charts/**/*.tgz
+
+# Django app (lesson-7/app)
+__pycache__/
+*.pyc
+lesson-7/app/.env
+db.sqlite3
+
+# macOS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+
+# Claude context
+CLAUDE.md
