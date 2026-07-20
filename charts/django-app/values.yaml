@@ -10,7 +10,7 @@ image:
   #   terraform output -raw ecr_repository_url
   # e.g. 123456789012.dkr.ecr.eu-north-1.amazonaws.com/lesson-7-ecr
   repository: REPLACE_WITH_ECR_REPOSITORY_URL
-  tag: v1.0.3
+  tag: latest
   pullPolicy: IfNotPresent
 
 # Optional image pull secrets. Not needed on EKS: the node IAM role has
