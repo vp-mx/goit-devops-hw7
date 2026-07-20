@@ -1,0 +1,53 @@
+# Values for the official argo/argo-cd Helm release. Kept deliberately
+# lean — dex/notifications/applicationSet are disabled and every component
+# gets small resource requests, since this project runs on Free-Tier-sized
+# (t3.micro) nodes shared with Jenkins and the Django app itself.
+server:
+  service:
+    type: LoadBalancer
+    port: 443
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 128Mi
+
+# SSO connector — not needed for this project.
+dex:
+  enabled: false
+
+# Plain Applications (declared in ./charts) are sufficient; ApplicationSets are unnecessary.
+applicationSet:
+  enabled: false
+
+notifications:
+  enabled: false

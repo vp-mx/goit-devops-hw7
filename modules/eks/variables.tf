@@ -39,7 +39,10 @@ variable "node_subnet_ids" {
 variable "node_instance_types" {
   description = "EC2 instance types for the worker nodes"
   type        = list(string)
-  default     = ["t3.micro"] # Free Tier eligible; override for more headroom if your account allows it
+  # See the node_instance_types description in the root variables.tf for
+  # the full rationale (pod-per-node limits, Free Tier eligibility by
+  # account age, fallback instructions) -- this default just mirrors it.
+  default = ["t3.small"]
 }
 
 variable "node_desired_size" {

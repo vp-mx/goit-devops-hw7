@@ -1,0 +1,6 @@
+# Default (placeholder) values for standalone `helm lint`/`helm template`.
+# In practice this chart is always installed by argo_cd.tf's helm_release
+# with real values supplied via templatefile("./values.yaml.tpl", ...), so
+# these defaults are never used for an actual deployment.
+applications: []
+repositories: []

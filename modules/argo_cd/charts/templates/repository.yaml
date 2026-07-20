@@ -1,0 +1,18 @@
+{{- range .Values.repositories }}
+# Argo CD's declarative way to register a Git repository's credentials: a
+# plain Secret labeled argocd.argoproj.io/secret-type: repository. The
+# argocd-server/repo-server watch for secrets with this label and pick it
+# up automatically — nothing to click through in the UI.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-{{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: git
+  url: {{ .url }}
+  username: {{ .username }}
+  password: {{ .password }}
+{{- end }}

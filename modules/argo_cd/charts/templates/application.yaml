@@ -1,0 +1,39 @@
+{{- range .Values.applications }}
+# Argo CD Application: tells Argo CD what to deploy (a Helm chart in a Git
+# repo), where to deploy it, and how to keep it in sync. Once Jenkins pushes
+# an updated image.tag to charts/django-app/values.yaml on the tracked
+# branch, Argo CD picks it up (polls every ~3 min by default, or instantly
+# via a webhook) and re-syncs automatically — no kubectl/helm command
+# needed on this end.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  finalizers:
+    # Ensures `argocd app delete` / `terraform destroy` also cleans up every
+    # resource this Application created, instead of leaving them orphaned.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .project }}
+  source:
+    repoURL: {{ .source.repoURL }}
+    path: {{ .source.path }}
+    targetRevision: {{ .source.targetRevision }}
+    helm:
+      valueFiles:
+        {{- toYaml .source.helm.valueFiles | nindent 8 }}
+      {{- if .source.helm.parameters }}
+      parameters:
+        {{- toYaml .source.helm.parameters | nindent 8 }}
+      {{- end }}
+  destination:
+    server: {{ .destination.server }}
+    namespace: {{ .destination.namespace }}
+  syncPolicy:
+    automated:
+      prune: {{ .syncPolicy.automated.prune }}
+      selfHeal: {{ .syncPolicy.automated.selfHeal }}
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

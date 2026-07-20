@@ -38,11 +38,14 @@ backend.tf.disabled
 charts/**/charts/
 charts/**/*.tgz
 
-# Django app (lesson-7/app)
+# Django app
 __pycache__/
 *.pyc
-lesson-7/app/.env
+app/.env
 db.sqlite3
+
+# Local secrets for `export $(grep -v '^#' .env | xargs)` (TF_VAR_github_pat etc.) — never commit
+.env
 
 # macOS / editor cruft
 .DS_Store
@@ -51,3 +54,4 @@ db.sqlite3
 
 # Claude context
 CLAUDE.md
+lesson-notes/

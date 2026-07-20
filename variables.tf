@@ -68,17 +68,24 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_types" {
-  # t3.micro is Free Tier eligible (unlike t3.small/t3.medium) — AWS rejects
-  # non-eligible types on accounts with the Free Tier restriction enabled:
-  # "InvalidParameterCombination - The specified instance type is not
-  # eligible for Free Tier". If your account doesn't have that restriction,
-  # override with a bigger type for more headroom, e.g.:
-  #   terraform apply -var='node_instance_types=["t3.small"]'
+  # t3.micro's pod-per-node limit (AWS VPC CNI, ~4 pods/node) is too small to
+  # fit Django + Postgres + Jenkins + Argo CD across 3 nodes, producing
+  # FailedScheduling: "Too many pods" / "Insufficient memory". t3.small
+  # roughly doubles both (2 GiB RAM, ~11 pods/node) and avoids this.
+  #
+  # Free Tier eligibility depends on when your AWS account was created:
+  #   - before 2025-07-15: legacy Free Tier, t2.micro/t3.micro only
+  #     (750 hrs/month) — t3.small WILL be billed.
+  #   - on/after 2025-07-15: "$200 credit / 6 months" Free plan, which does
+  #     cover t3.small.
+  # If your account rejects t3.small with AsgInstanceLaunchFailures, fall
+  # back to t3.micro with more nodes instead:
+  #   terraform apply -var='node_instance_types=["t3.micro"]' -var='node_desired_size=5' -var='node_max_size=6'
   # Check what your account is actually allowed with:
   #   aws ec2 describe-instance-types --filters "Name=free-tier-eligible,Values=true" --query "InstanceTypes[].InstanceType"
   description = "EC2 instance types for the EKS worker nodes"
   type        = list(string)
-  default     = ["t3.micro"]
+  default     = ["t3.small"]
 }
 
 variable "node_desired_size" {
@@ -97,4 +104,43 @@ variable "node_max_size" {
   description = "Maximum number of EKS worker nodes"
   type        = number
   default     = 4
+}
+
+# ---------------------------------------------------------------------------
+# CI/CD: Jenkins + Argo CD (theme 8-9)
+# ---------------------------------------------------------------------------
+variable "git_repo_url" {
+  description = "HTTPS URL of this Git repository — Jenkins builds app/Dockerfile from it, updates charts/django-app/values.yaml#image.tag and pushes back; Argo CD watches it to deploy charts/django-app"
+  type        = string
+  default     = "https://github.com/vp-mx/goit-devops-hw7.git"
+}
+
+variable "git_branch" {
+  description = "Branch Jenkins pushes the image-tag-bump commit to and Argo CD tracks for deployments."
+  type        = string
+  default     = "lesson-8-9"
+}
+
+variable "github_username" {
+  description = "GitHub username for the Personal Access Token below (used by both Jenkins and Argo CD to access the repo)"
+  type        = string
+}
+
+variable "github_pat" {
+  description = "GitHub Personal Access Token (repo scope) — required. Supply via TF_VAR_github_pat env var or a gitignored *.tfvars file; never commit a real value."
+  type        = string
+  sensitive   = true
+}
+
+variable "jenkins_admin_password" {
+  description = "Jenkins admin password. Override for anything beyond a local/learning deployment."
+  type        = string
+  default     = "ChangeMe123!"
+  sensitive   = true
+}
+
+variable "jenkins_persistence_enabled" {
+  description = "Give Jenkins a PersistentVolumeClaim (requires the aws-ebs-csi-driver EKS add-on, currently NOT installed — see modules/eks). Left false by default: on t3.micro nodes, Jenkins + Argo CD + the app already use most of the available capacity, and JCasC/the seed job make Jenkins fully reproducible from code, so losing state on a pod restart isn't a big deal here."
+  type        = bool
+  default     = false
 }
