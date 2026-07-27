@@ -118,7 +118,7 @@ variable "git_repo_url" {
 variable "git_branch" {
   description = "Branch Jenkins pushes the image-tag-bump commit to and Argo CD tracks for deployments."
   type        = string
-  default     = "lesson-8-9"
+  default     = "final-project"
 }
 
 variable "github_username" {
