@@ -16,7 +16,7 @@ output "grafana_admin_password" {
 
 output "grafana_port_forward_command" {
   description = "Command to reach Grafana locally (service is ClusterIP on purpose -- see values.yaml)"
-  value       = "kubectl port-forward -n ${var.namespace} svc/kube-prometheus-stack-grafana 3000:80"
+  value       = "kubectl port-forward -n ${var.namespace} svc/grafana 3000:80"
 }
 
 output "prometheus_port_forward_command" {
