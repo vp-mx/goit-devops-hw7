@@ -1,0 +1,120 @@
+# Values for prometheus-community/kube-prometheus-stack. Kept deliberately
+# lean and EBS-free, matching modules/argo_cd and modules/jenkins: this
+# project runs on Free-Tier-sized (t3.small) nodes shared with Jenkins,
+# Argo CD and the Django app itself, and the aws-ebs-csi-driver EKS add-on
+# is not installed, so nothing here may request a PersistentVolumeClaim.
+
+# EKS is a managed control plane -- there is no reachable kube-scheduler,
+# kube-controller-manager or etcd to scrape (they're not exposed at all),
+# and the kube-proxy metrics endpoint isn't wired up on the AMI this project
+# uses either. Leaving these enabled just produces permanently-down targets
+# and noisy alerts for nothing.
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# Alertmanager is out of scope for this project (no receiver to page) --
+# disabling it saves a pod's worth of memory on already-tight nodes.
+alertmanager:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    # No storageSpec -- Prometheus Operator falls back to an emptyDir,
+    # same call as the in-cluster Postgres StatefulSet (see
+    # charts/django-app/templates/postgres.yaml).
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 150m
+      memory: 192Mi
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+grafana:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # ClusterIP on purpose -- reached via `kubectl port-forward` (see
+  # modules/monitoring/outputs.tf and the root README), not an extra
+  # billable LoadBalancer.
+  service:
+    type: ClusterIP
+
+  # Auto-provisioned so the dashboard is there on first login, no manual
+  # "add data source" click.
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://kube-prometheus-stack-prometheus:9090
+          access: proxy
+          isDefault: true
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  # Ships with the chart's own dashboards (already enabled by default via
+  # `defaultDashboardsEnabled`); this just adds the two most useful
+  # cluster-level views on top, pulled from grafana.com/dashboards.
+  dashboards:
+    default:
+      k8s-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      k8s-node-exporter:
+        gnetId: 1860
+        revision: 37
+        datasource: Prometheus

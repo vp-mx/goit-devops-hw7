@@ -76,6 +76,23 @@ output "argocd_admin_password_command" {
   value       = module.argo_cd.admin_password_command
 }
 
+# --- Monitoring --------------------------------------------------------------
+output "grafana_port_forward_command" {
+  description = "Command to reach Grafana locally (username: admin)"
+  value       = module.monitoring.grafana_port_forward_command
+}
+
+output "grafana_admin_password" {
+  description = "Grafana admin password. Read with: terraform output -raw grafana_admin_password"
+  value       = module.monitoring.grafana_admin_password
+  sensitive   = true
+}
+
+output "prometheus_port_forward_command" {
+  description = "Command to reach the Prometheus UI locally"
+  value       = module.monitoring.prometheus_port_forward_command
+}
+
 # --- RDS (only set when rds_enabled = true) ---------------------------------
 output "rds_endpoint" {
   description = "Database connection endpoint (host:port). null when rds_enabled = false."

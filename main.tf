@@ -13,13 +13,13 @@ module "s3_backend" {
 # The cluster name is passed so the subnets get tagged for EKS load balancer
 # discovery. This is the same VPC layout the EKS cluster below runs in.
 module "vpc" {
-  source              = "./modules/vpc"
-  vpc_name            = "${var.project}-vpc"
-  vpc_cidr_block      = var.vpc_cidr_block
-  public_subnets      = var.public_subnet_cidrs
-  private_subnets     = var.private_subnet_cidrs
-  availability_zones  = local.azs
-  cluster_name        = local.cluster_name
+  source             = "./modules/vpc"
+  vpc_name           = "${var.project}-vpc"
+  vpc_cidr_block     = var.vpc_cidr_block
+  public_subnets     = var.public_subnet_cidrs
+  private_subnets    = var.private_subnet_cidrs
+  availability_zones = local.azs
+  cluster_name       = local.cluster_name
 }
 
 # Container registry for the Django Docker image.
@@ -91,6 +91,20 @@ module "argo_cd" {
   app_chart_path       = "charts/django-app"
   app_namespace        = "default"
   app_image_repository = module.ecr.ecr_repository_url
+
+  depends_on = [module.eks]
+}
+
+# ---------------------------------------------------------------------------
+# Monitoring (final project): Prometheus + Grafana via kube-prometheus-stack.
+# Always on -- unlike RDS below, this doesn't create any billable AWS
+# resources, only in-cluster pods, so there's no reason to gate it behind a
+# flag.
+# ---------------------------------------------------------------------------
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  grafana_admin_password = var.monitoring_grafana_admin_password
 
   depends_on = [module.eks]
 }

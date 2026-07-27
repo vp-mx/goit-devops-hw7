@@ -146,6 +146,16 @@ variable "jenkins_persistence_enabled" {
 }
 
 # ---------------------------------------------------------------------------
+# Monitoring (final project, modules/monitoring)
+# ---------------------------------------------------------------------------
+variable "monitoring_grafana_admin_password" {
+  description = "Grafana admin password. Leave null to have the module generate and store a random one in Terraform state (read it back via the sensitive grafana_admin_password output)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+# ---------------------------------------------------------------------------
 # RDS (lesson-db-module, modules/rds)
 # ---------------------------------------------------------------------------
 variable "rds_enabled" {
