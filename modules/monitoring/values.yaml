@@ -66,8 +66,7 @@ prometheus-node-exporter:
 
 grafana:
   # Fixed name (instead of the chart's default "<release>-grafana") so the
-  # service is reachable as `svc/grafana` -- matches the mentor's checklist
-  # port-forward command and the root README.
+  # service is reachable as `svc/grafana` -- see the root README.
   fullnameOverride: "grafana"
   persistence:
     enabled: false

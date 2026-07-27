@@ -96,7 +96,7 @@ module "argo_cd" {
 }
 
 # ---------------------------------------------------------------------------
-# Monitoring (final project): Prometheus + Grafana via kube-prometheus-stack.
+# Monitoring: Prometheus + Grafana via kube-prometheus-stack.
 # Always on -- unlike RDS below, this doesn't create any billable AWS
 # resources, only in-cluster pods, so there's no reason to gate it behind a
 # flag.

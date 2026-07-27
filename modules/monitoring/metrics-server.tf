@@ -1,8 +1,7 @@
 # metrics-server -- feeds `kubectl top` and the HorizontalPodAutoscaler in
 # charts/django-app/templates/hpa.yaml. Without it, `kubectl get hpa` shows
 # TARGETS as <unknown> forever instead of a real CPU percentage. Grouped
-# with the rest of monitoring since the final project grades "моніторинг
-# та автомасштабування" as one criterion.
+# with the rest of monitoring since autoscaling depends on it.
 resource "helm_release" "metrics_server" {
   name             = "metrics-server"
   namespace        = "kube-system"

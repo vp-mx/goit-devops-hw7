@@ -1,4 +1,4 @@
-# Final project: EKS + ECR + RDS + Helm + Jenkins + Argo CD + Prometheus/Grafana
+# EKS + ECR + RDS + Helm + Jenkins + Argo CD + Prometheus/Grafana
 
 This repository contains Terraform code to provision a full DevOps stack on AWS: a VPC, an EKS (Kubernetes) cluster, an ECR repository, an optional RDS/Aurora database, and — on top of the cluster — a Helm chart deploying a Django application, a full CI/CD pipeline (**Jenkins** + **Argo CD**), and a monitoring stack (**Prometheus** + **Grafana** + `metrics-server`).
 
@@ -66,7 +66,7 @@ goit-devops-hw7/
 - **Helm chart** — Deployment, Service of type `LoadBalancer`, ConfigMap and Secret for environment variables, an HPA scaling based on CPU utilization, and a single-replica Postgres StatefulSet with a PVC.
 - **Jenkins** (`modules/jenkins`) — installed via the `jenkinsci/jenkins` Helm chart. JCasC provisions a `github-token` credential and, via its native `jobs:` key (a trusted Job DSL script run directly at controller boot — no separate seed job or manual Script Approval needed), creates the `django-app-pipeline` pipeline job pointed at the `Jenkinsfile` in this repo. Builds run as short-lived Kubernetes pod agents (`kaniko` + `git` containers) under a `jenkins-sa` service account bound via IRSA to an IAM role scoped to `ecr:PutImage`/etc. on this project's ECR repo only — no static AWS keys anywhere in Jenkins.
 - **Argo CD** (`modules/argo_cd`) — installed via the official `argo/argo-cd` Helm chart (dex/applicationSet/notifications disabled to save resources), plus a small local chart (`modules/argo_cd/charts`) that declares the `django-app` `Application` CRD (pointing at `charts/django-app` on the tracked branch, `automated: {prune: true, selfHeal: true}`) and a repository-credential `Secret` so Argo CD can pull this (private) repo.
-- **Monitoring** (`modules/monitoring`) — `prometheus-community/kube-prometheus-stack` (Prometheus + Grafana + kube-state-metrics + node-exporter; Alertmanager and the EKS-unreachable control-plane scrape targets are disabled) plus `metrics-server` (feeds the HPA and `kubectl top`). Everything is ClusterIP-only and PVC-free (no `aws-ebs-csi-driver` add-on installed) — reached via `kubectl port-forward`, same as the [Final project checklist](#final-project-checklist) below. Always on: unlike RDS, it creates no billable AWS resources.
+- **Monitoring** (`modules/monitoring`) — `prometheus-community/kube-prometheus-stack` (Prometheus + Grafana + kube-state-metrics + node-exporter; Alertmanager and the EKS-unreachable control-plane scrape targets are disabled) plus `metrics-server` (feeds the HPA and `kubectl top`). Everything is ClusterIP-only and PVC-free (no `aws-ebs-csi-driver` add-on installed) — reached via `kubectl port-forward`, see the [Verification checklist](#verification-checklist) below. Always on: unlike RDS, it creates no billable AWS resources.
 - **RDS** (`modules/rds`, off by default via `rds_enabled = false`) — a flexible module that creates either a standard `aws_db_instance` or an Aurora cluster (`use_aurora`), plus its own DB Subnet Group, Security Group and Parameter Group. See `modules/rds/README.md` for the full variable reference. Left disabled by default because it's a real, billable resource on top of everything else; the chart's own in-cluster Postgres is what `charts/django-app` uses out of the box. To point the app at RDS instead:
   ```bash
   terraform apply -var='rds_enabled=true'
@@ -222,9 +222,9 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
 
 Alertmanager and the `kubeScheduler`/`kubeControllerManager`/`kubeEtcd`/`kubeProxy` scrape jobs are disabled on purpose — EKS is a managed control plane, so those targets are never reachable and would just sit permanently `down` (see `modules/monitoring/values.yaml`).
 
-## 8. Final project checklist
+## 8. Verification checklist
 
-Per the assignment's acceptance checklist:
+Quick end-to-end smoke test — confirms every piece is actually up, not just that `terraform apply` exited 0:
 
 ```bash
 kubectl get all -n jenkins
@@ -240,13 +240,13 @@ kubectl get pods             # 2+ Running
 kubectl get svc django-app   # external LoadBalancer address
 ```
 
-| Criterion | Where |
+| Area | Where it lives |
 |---|---|
-| Correct architecture (VPC/EKS/ECR/RDS) | `modules/vpc`, `modules/eks`, `modules/ecr`, `modules/rds` |
-| Security: VPC, IAM, Security Groups | private subnets for nodes/RDS, IRSA (no static AWS keys), least-privilege ECR policy, RDS/EKS security groups |
-| App deployed with CI/CD | `charts/django-app` + `modules/jenkins` + `modules/argo_cd`, step 6 above |
+| Architecture (VPC/EKS/ECR/RDS) | `modules/vpc`, `modules/eks`, `modules/ecr`, `modules/rds` |
+| Security (VPC, IAM, Security Groups) | private subnets for nodes/RDS, IRSA (no static AWS keys), least-privilege ECR policy, RDS/EKS security groups |
+| CI/CD | `charts/django-app` + `modules/jenkins` + `modules/argo_cd`, step 6 above |
 | Monitoring + autoscaling | `modules/monitoring` (Prometheus/Grafana/metrics-server) + `charts/django-app/templates/hpa.yaml`, step 7 above |
-| Documentation | this README + `modules/rds/README.md` |
+| Docs | this README + `modules/rds/README.md` |
 
 ## 9. Teardown
 
