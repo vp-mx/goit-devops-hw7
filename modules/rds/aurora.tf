@@ -24,9 +24,9 @@ resource "aws_rds_cluster" "this" {
   vpc_security_group_ids          = [aws_security_group.this.id]
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.this[0].name
 
-  backup_retention_period = var.backup_retention_period
-  deletion_protection     = var.deletion_protection
-  skip_final_snapshot     = var.skip_final_snapshot
+  backup_retention_period   = var.backup_retention_period
+  deletion_protection       = var.deletion_protection
+  skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = var.skip_final_snapshot ? null : "${var.identifier}-final-snapshot"
 
   tags = merge(var.tags, {

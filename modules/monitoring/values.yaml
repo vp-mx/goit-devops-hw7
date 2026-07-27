@@ -1,0 +1,107 @@
+# Values for prometheus-community/kube-prometheus-stack. Kept deliberately
+# lean and EBS-free, matching modules/argo_cd and modules/jenkins: this
+# project runs on Free-Tier-sized (t3.small) nodes shared with Jenkins,
+# Argo CD and the Django app itself, and the aws-ebs-csi-driver EKS add-on
+# is not installed, so nothing here may request a PersistentVolumeClaim.
+
+# EKS is a managed control plane -- there is no reachable kube-scheduler,
+# kube-controller-manager or etcd to scrape (they're not exposed at all),
+# and the kube-proxy metrics endpoint isn't wired up on the AMI this project
+# uses either. Leaving these enabled just produces permanently-down targets
+# and noisy alerts for nothing.
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# Alertmanager is out of scope for this project (no receiver to page) --
+# disabling it saves a pod's worth of memory on already-tight nodes.
+alertmanager:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    # No storageSpec -- Prometheus Operator falls back to an emptyDir,
+    # same call as the in-cluster Postgres StatefulSet (see
+    # charts/django-app/templates/postgres.yaml).
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 150m
+      memory: 192Mi
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+grafana:
+  # Fixed name (instead of the chart's default "<release>-grafana") so the
+  # service is reachable as `svc/grafana` -- matches the mentor's checklist
+  # port-forward command and the root README.
+  fullnameOverride: "grafana"
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # ClusterIP on purpose -- reached via `kubectl port-forward` (see
+  # modules/monitoring/outputs.tf and the root README), not an extra
+  # billable LoadBalancer.
+  service:
+    type: ClusterIP
+
+  # No custom `datasources:`/`dashboardProviders:` here -- kube-prometheus-stack
+  # already provisions a default Prometheus datasource (pointing at its own
+  # Prometheus service) and a default dashboard provider (sidecar-fed from
+  # /tmp/dashboards) out of the box. Redeclaring either just conflicts with
+  # the chart's own copy -- a second `isDefault: true` datasource makes
+  # Grafana refuse to start ("Only one datasource per organization can be
+  # marked as default"), which is exactly what happened here before this
+  # comment existed.
+  #
+  # This just adds the two most useful cluster-level dashboards on top of
+  # the chart's defaults, via the existing default provider.
+  dashboards:
+    default:
+      k8s-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      k8s-node-exporter:
+        gnetId: 1860
+        revision: 37
+        datasource: Prometheus

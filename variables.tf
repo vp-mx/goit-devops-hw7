@@ -118,7 +118,7 @@ variable "git_repo_url" {
 variable "git_branch" {
   description = "Branch Jenkins pushes the image-tag-bump commit to and Argo CD tracks for deployments."
   type        = string
-  default     = "lesson-8-9"
+  default     = "final-project"
 }
 
 variable "github_username" {
@@ -143,6 +143,16 @@ variable "jenkins_persistence_enabled" {
   description = "Give Jenkins a PersistentVolumeClaim (requires the aws-ebs-csi-driver EKS add-on, currently NOT installed — see modules/eks). Left false by default: on t3.micro nodes, Jenkins + Argo CD + the app already use most of the available capacity, and JCasC/the seed job make Jenkins fully reproducible from code, so losing state on a pod restart isn't a big deal here."
   type        = bool
   default     = false
+}
+
+# ---------------------------------------------------------------------------
+# Monitoring (final project, modules/monitoring)
+# ---------------------------------------------------------------------------
+variable "monitoring_grafana_admin_password" {
+  description = "Grafana admin password. Leave null to have the module generate and store a random one in Terraform state (read it back via the sensitive grafana_admin_password output)."
+  type        = string
+  default     = null
+  sensitive   = true
 }
 
 # ---------------------------------------------------------------------------

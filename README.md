@@ -1,8 +1,10 @@
-# EKS + ECR + Helm + Jenkins + Argo CD
+# Final project: EKS + ECR + RDS + Helm + Jenkins + Argo CD + Prometheus/Grafana
 
-This repository contains Terraform code to provision an EKS (Kubernetes) cluster and an ECR repository inside a dedicated VPC on AWS. It also includes a Helm chart to deploy a Django application onto the cluster, and a full CI/CD pipeline: **Jenkins** builds the Django image with Kaniko and pushes it to ECR, then bumps `charts/django-app/values.yaml#image.tag` and pushes that commit back to this repo; **Argo CD** watches the same repo/path and automatically syncs the cluster to match — Git is the handoff between the two.
+This repository contains Terraform code to provision a full DevOps stack on AWS: a VPC, an EKS (Kubernetes) cluster, an ECR repository, an optional RDS/Aurora database, and — on top of the cluster — a Helm chart deploying a Django application, a full CI/CD pipeline (**Jenkins** + **Argo CD**), and a monitoring stack (**Prometheus** + **Grafana** + `metrics-server`).
 
-The application image is built from the `app/` directory. The Helm chart deploys a Deployment, Service (LoadBalancer), ConfigMap, Secret, a Horizontal Pod Autoscaler, and an in-cluster PostgreSQL StatefulSet.
+**CI/CD:** Jenkins builds the Django image with Kaniko and pushes it to ECR, then bumps `charts/django-app/values.yaml#image.tag` and pushes that commit back to this repo; Argo CD watches the same repo/path and automatically syncs the cluster to match — Git is the handoff between the two.
+
+The application image is built from the `app/` directory. The Helm chart deploys a Deployment, Service (LoadBalancer), ConfigMap, Secret, a Horizontal Pod Autoscaler, and an in-cluster PostgreSQL StatefulSet (or point it at the `rds` module's output instead — see [Architecture](#architecture)).
 
 ## Project structure
 
@@ -24,8 +26,10 @@ goit-devops-hw7/
 │   ├── vpc/                   # VPC, public/private subnets, IGW, NAT, routing
 │   ├── ecr/                   # ECR repository for the application image
 │   ├── eks/                   # EKS cluster, managed node group, IAM, OIDC provider
+│   ├── rds/                   # Flexible standard-RDS/Aurora module (off by default, see rds_enabled)
 │   ├── jenkins/                # Jenkins via Helm: JCasC, pipeline auto-created via jobs:, IRSA for Kaniko
-│   └── argo_cd/                 # Argo CD via Helm + Application/repository-credential chart
+│   ├── argo_cd/                 # Argo CD via Helm + Application/repository-credential chart
+│   └── monitoring/              # kube-prometheus-stack (Prometheus+Grafana) + metrics-server via Helm
 │
 ├── app/                       # Application code + Dockerfile
 │   ├── Dockerfile
@@ -62,6 +66,14 @@ goit-devops-hw7/
 - **Helm chart** — Deployment, Service of type `LoadBalancer`, ConfigMap and Secret for environment variables, an HPA scaling based on CPU utilization, and a single-replica Postgres StatefulSet with a PVC.
 - **Jenkins** (`modules/jenkins`) — installed via the `jenkinsci/jenkins` Helm chart. JCasC provisions a `github-token` credential and, via its native `jobs:` key (a trusted Job DSL script run directly at controller boot — no separate seed job or manual Script Approval needed), creates the `django-app-pipeline` pipeline job pointed at the `Jenkinsfile` in this repo. Builds run as short-lived Kubernetes pod agents (`kaniko` + `git` containers) under a `jenkins-sa` service account bound via IRSA to an IAM role scoped to `ecr:PutImage`/etc. on this project's ECR repo only — no static AWS keys anywhere in Jenkins.
 - **Argo CD** (`modules/argo_cd`) — installed via the official `argo/argo-cd` Helm chart (dex/applicationSet/notifications disabled to save resources), plus a small local chart (`modules/argo_cd/charts`) that declares the `django-app` `Application` CRD (pointing at `charts/django-app` on the tracked branch, `automated: {prune: true, selfHeal: true}`) and a repository-credential `Secret` so Argo CD can pull this (private) repo.
+- **Monitoring** (`modules/monitoring`) — `prometheus-community/kube-prometheus-stack` (Prometheus + Grafana + kube-state-metrics + node-exporter; Alertmanager and the EKS-unreachable control-plane scrape targets are disabled) plus `metrics-server` (feeds the HPA and `kubectl top`). Everything is ClusterIP-only and PVC-free (no `aws-ebs-csi-driver` add-on installed) — reached via `kubectl port-forward`, same as the [Final project checklist](#final-project-checklist) below. Always on: unlike RDS, it creates no billable AWS resources.
+- **RDS** (`modules/rds`, off by default via `rds_enabled = false`) — a flexible module that creates either a standard `aws_db_instance` or an Aurora cluster (`use_aurora`), plus its own DB Subnet Group, Security Group and Parameter Group. See `modules/rds/README.md` for the full variable reference. Left disabled by default because it's a real, billable resource on top of everything else; the chart's own in-cluster Postgres is what `charts/django-app` uses out of the box. To point the app at RDS instead:
+  ```bash
+  terraform apply -var='rds_enabled=true'
+  helm upgrade --install django-app charts/django-app \
+    --set postgresql.enabled=false \
+    --set config.POSTGRES_HOST=$(terraform output -json | jq -r '.rds_endpoint.value' | cut -d: -f1)
+  ```
 
 ## Prerequisites
 
@@ -117,13 +129,7 @@ make docker-push
 ./scripts/push-to-ecr.sh eu-north-1 lesson-7-ecr latest
 ```
 
-## 4. Install metrics-server (required by the HPA)
-
-```bash
-make metrics-server
-```
-
-## 5. Deploy the Helm chart
+## 4. Deploy the Helm chart
 
 Configure the ECR image URL and deploy the chart:
 
@@ -139,7 +145,7 @@ helm upgrade --install django-app charts/django-app \
 
 *(Note: Never commit real secret values into `values.yaml` or version control. Use `--set` or a gitignored overrides file.)*
 
-## 6. Verify
+## 5. Verify
 
 Check the deployed resources:
 
@@ -161,7 +167,7 @@ kubectl run load-gen --image=busybox --restart=Never -- \
 kubectl get hpa django-app -w
 ```
 
-## 7. CI/CD: run the Jenkins pipeline, watch Argo CD sync
+## 6. CI/CD: run the Jenkins pipeline, watch Argo CD sync
 
 Jenkins and Argo CD are both installed and configured by the same `make bootstrap` / `terraform apply` from step 1 — nothing extra to install by hand.
 
@@ -176,7 +182,7 @@ Log in and confirm `django-app-pipeline` already exists in the job list — JCas
 1. **Build & Push Docker Image** — runs `app/Dockerfile` through Kaniko (as the `jenkins-sa` pod, using IRSA — no AWS keys stored anywhere) and pushes `<ecr-repo>:v1.0.<build-number>` and `:latest` to ECR.
 2. **Update Chart Tag in Git** — `sed`s the new tag into `charts/django-app/values.yaml#image.tag`, commits, and pushes to the tracked branch using the `github-token` credential.
 
-Watch the build's console output for both stages; a green build means the tag-bump commit is now on the tracked branch (`git_branch`, default `lesson-8-9`; override with `-var git_branch=main` once merged).
+Watch the build's console output for both stages; a green build means the tag-bump commit is now on the tracked branch (`git_branch`, default `final-project`; override with `-var git_branch=main` once merged).
 
 **Open Argo CD and watch it pick up the commit:**
 
@@ -189,9 +195,60 @@ kubectl get application django-app -n argocd
 
 `syncPolicy.automated` (`prune: true`, `selfHeal: true`) means Argo CD re-syncs on its own polling interval after the Jenkins push — no manual sync needed, though you can trigger one immediately from the UI (**django-app → SYNC**) if you don't want to wait. Once synced, `kubectl get pods -l app.kubernetes.io/instance=django-app` should show pods running the new tag.
 
-**Capacity note:** Jenkins + Argo CD + Django + Postgres all run on the same node group, sized `t3.small` by default (see `node_instance_types`/`node_desired_size` in `variables.tf`) — `t3.micro`'s AWS VPC CNI pod-per-node limit (~4 pods/node) is too low to fit everything together, so `t3.small` (~11 pods/node) is the default instead. Requests/limits for Jenkins and Argo CD are deliberately small and Argo CD's dex/applicationSet/notifications components are disabled to leave headroom regardless. If pods still stay `Pending`, bump `node_desired_size`/`node_max_size`, or fall back to `t3.micro` with more nodes if your AWS account doesn't cover `t3.small` under its Free Tier (see the note above `node_instance_types` in `variables.tf`).
+**Capacity note:** Jenkins + Argo CD + Django + Postgres + the monitoring stack (Prometheus, Grafana, kube-state-metrics, node-exporter, metrics-server) all run on the same node group, sized `t3.small` by default (see `node_instance_types`/`node_desired_size` in `variables.tf`) — `t3.micro`'s AWS VPC CNI pod-per-node limit (~4 pods/node) is too low to fit everything together, so `t3.small` (~11 pods/node) is the default instead. Requests/limits are deliberately small everywhere and Argo CD's dex/applicationSet/notifications components plus Alertmanager are disabled to leave headroom regardless. If pods still stay `Pending`, bump `node_desired_size`/`node_max_size`, or fall back to `t3.micro` with more nodes if your AWS account doesn't cover `t3.small` under its Free Tier (see the note above `node_instance_types` in `variables.tf`).
 
-## 8. Teardown
+## 7. Monitoring: Prometheus + Grafana
+
+Installed and configured by the same `terraform apply` as everything else — `modules/monitoring` (`kube-prometheus-stack` + `metrics-server`), no manual Helm install needed.
+
+```bash
+kubectl get all -n monitoring
+```
+
+**Open Grafana** (username `admin`):
+
+```bash
+kubectl port-forward -n monitoring svc/grafana 3000:80
+terraform output -raw grafana_admin_password
+```
+
+Then visit `http://localhost:3000` — the `Prometheus` datasource and two dashboards (Kubernetes cluster, Node Exporter) are auto-provisioned, so there's something to look at immediately.
+
+**Open Prometheus** (confirm targets are `UP` under Status → Targets):
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
+```
+
+Alertmanager and the `kubeScheduler`/`kubeControllerManager`/`kubeEtcd`/`kubeProxy` scrape jobs are disabled on purpose — EKS is a managed control plane, so those targets are never reachable and would just sit permanently `down` (see `modules/monitoring/values.yaml`).
+
+## 8. Final project checklist
+
+Per the assignment's acceptance checklist:
+
+```bash
+kubectl get all -n jenkins
+kubectl get all -n argocd
+kubectl get all -n monitoring
+
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins
+kubectl port-forward svc/argocd-server 8081:443 -n argocd
+kubectl port-forward svc/grafana 3000:80 -n monitoring
+
+kubectl get hpa django-app   # real %, not <unknown> -- needs metrics-server (modules/monitoring)
+kubectl get pods             # 2+ Running
+kubectl get svc django-app   # external LoadBalancer address
+```
+
+| Criterion | Where |
+|---|---|
+| Correct architecture (VPC/EKS/ECR/RDS) | `modules/vpc`, `modules/eks`, `modules/ecr`, `modules/rds` |
+| Security: VPC, IAM, Security Groups | private subnets for nodes/RDS, IRSA (no static AWS keys), least-privilege ECR policy, RDS/EKS security groups |
+| App deployed with CI/CD | `charts/django-app` + `modules/jenkins` + `modules/argo_cd`, step 6 above |
+| Monitoring + autoscaling | `modules/monitoring` (Prometheus/Grafana/metrics-server) + `charts/django-app/templates/hpa.yaml`, step 7 above |
+| Documentation | this README + `modules/rds/README.md` |
+
+## 9. Teardown
 
 To destroy the infrastructure, remove the `django-app` Helm release first (Jenkins/Argo CD are Terraform-managed `helm_release` resources, so `make destroy` cleans those — and their LoadBalancers — up on its own):
 

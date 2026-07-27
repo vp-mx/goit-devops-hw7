@@ -57,17 +57,17 @@ resource "aws_vpc_security_group_ingress_rule" "from_cidr_blocks" {
 
   security_group_id = aws_security_group.this.id
   description       = "DB access from ${each.value}"
-  cidr_ipv4          = each.value
-  from_port          = local.effective_port
-  to_port            = local.effective_port
-  ip_protocol        = "tcp"
+  cidr_ipv4         = each.value
+  from_port         = local.effective_port
+  to_port           = local.effective_port
+  ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.this.id
-  description        = "Allow all outbound"
-  cidr_ipv4          = "0.0.0.0/0"
-  ip_protocol        = "-1"
+  description       = "Allow all outbound"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
 }
 
 # --- Parameter group: standard RDS instance -----------------------------
